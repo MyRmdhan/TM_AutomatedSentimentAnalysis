@@ -18,35 +18,158 @@ from sklearn.feature_extraction.text import TfidfVectorizer  # Tambah buat TF-ID
 API_KEY = st.secrets["YOUTUBE_API_KEY"]
 
 # FULL DARK MODE — CANTIK, MODERN, ELEGAN
-st.set_page_config(page_title="YT Sentiment Analyzer", layout="wide")
+st.set_page_config(page_title="YT Sentiment Analyzer", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
 <style>
+    * {
+        margin: 0;
+        padding: 0;
+    }
+    
     .stApp {
         background: linear-gradient(135deg, #0a0a0a, #1a1a1a);
         color: #e0e0e0;
     }
+    
+    /* Button Styling */
     .stButton>button {
-        background: linear-gradient(45deg, #ffffff, #888888);
+        background: linear-gradient(135deg, #ffffff, #cccccc);
         color: #000000;
-        border-radius: 16px;
-        font-weight: bold;
+        border-radius: 10px;
+        font-weight: 600;
         border: none;
-        padding: 12px;
-        box-shadow: 0 4px 15px rgba(255,255,255,0.2);
+        padding: 10px 24px;
+        box-shadow: 0 4px 15px rgba(255,255,255,0.15);
+        transition: all 0.3s ease;
+        font-size: 14px;
     }
+    
     .stButton>button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(255,255,255,0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(255,255,255,0.25);
     }
+    
+    /* Input Styling */
     .stTextInput>div>div>input {
+        background-color: #151515;
+        color: #ffffff;
+        border-radius: 10px;
+        border: 1.5px solid #333333;
+        padding: 12px 16px;
+        font-size: 14px;
+    }
+    
+    .stTextInput>div>div>input:focus {
+        border-color: #666666;
+        box-shadow: 0 0 0 3px rgba(255,255,255,0.1);
+    }
+    
+    /* Slider Styling */
+    .stSlider>div>div>div>div {
+        background-color: #333333;
+    }
+    
+    /* Heading Styling */
+    h1 {
+        color: #ffffff !important;
+        font-size: 2.5em !important;
+        font-weight: 700 !important;
+        margin-bottom: 10px !important;
+        letter-spacing: -0.5px;
+    }
+    
+    h2 {
+        color: #ffffff !important;
+        font-size: 1.8em !important;
+        font-weight: 600 !important;
+        margin-top: 20px !important;
+        margin-bottom: 15px !important;
+    }
+    
+    h3, h4 {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    
+    .stMarkdown {
+        color: #e0e0e0 !important;
+    }
+    
+    /* Expander Styling */
+    .stExpander {
+        background-color: #151515;
+        border: 1px solid #333333;
+        border-radius: 10px;
+    }
+    
+    .streamlit-expanderHeader {
         background-color: #1a1a1a;
-        color: white;
+    }
+    
+    /* Metric Styling */
+    .stMetric {
+        background-color: #151515;
+        padding: 20px;
         border-radius: 12px;
         border: 1px solid #333333;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
-    h1, h2, h3, h4 {color: #ffffff !important;}
-    .stMarkdown {color: #e0e0e0 !important;}
-    .stExpander {background-color: #1a1a1a; border: 1px solid #333333; border-radius: 10px;}
+    
+    /* Tab Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background-color: #1a1a1a;
+        border: 1px solid #333333;
+        color: #999999;
+        border-radius: 8px;
+        font-weight: 500;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #333333;
+        color: #ffffff;
+    }
+    
+    /* Success/Info/Warning Messages */
+    .stSuccess {
+        background-color: rgba(0,200,0,0.1) !important;
+        border-left: 4px solid #00c800 !important;
+    }
+    
+    .stInfo {
+        background-color: rgba(100,200,255,0.1) !important;
+        border-left: 4px solid #64c8ff !important;
+    }
+    
+    .stWarning {
+        background-color: rgba(255,200,0,0.1) !important;
+        border-left: 4px solid #ffc800 !important;
+    }
+    
+    /* Divider */
+    .stDivider {
+        margin: 20px 0 !important;
+        border: none;
+        border-top: 1px solid #333333 !important;
+    }
+    
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0a0a0a, #151515);
+        border-right: 1px solid #333333;
+    }
+    
+    /* Selectbox & Number Input */
+    .stNumberInput>div>div>input {
+        background-color: #151515;
+        color: #ffffff;
+        border-radius: 10px;
+        border: 1.5px solid #333333;
+        padding: 10px 12px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -211,27 +334,65 @@ for k in ['video_info','video_id','comments','timestamps','counts','percentages'
         st.session_state[k] = None
 
 # ================== UI ==================
-st.title("YouTube Sentiment Analyzer")
-st.markdown("**Dark Mode • Indo RoBERTa • Insight Lebih Variatif & Detail • Siap Presentasi UAS**")
+# Header Section dengan styling menarik
+col_header1, col_header2 = st.columns([1, 1])
+with col_header1:
+    st.markdown("""
+    <div style='padding: 20px 0;'>
+        <h1 style='margin: 0;'>🎬 YouTube Sentiment Analyzer</h1>
+        <p style='color: #888888; font-size: 14px; margin: 8px 0 0 0;'>Analisis sentimen komentar video YouTube dengan AI IndoBERT</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_header2:
+    st.markdown("""
+    <div style='text-align: right; padding: 20px 0;'>
+        <p style='color: #666666; font-size: 12px;'>
+            <strong>Model:</strong> Indo RoBERTa<br>
+            <strong>Dark Mode:</strong> Modern Edition v1.0
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 20px 0;'>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("""
     <style>
         [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0a0a0a, #1a1a1a);
+            background: linear-gradient(180deg, #0a0a0a, #151515);
         }
     </style>
     """, unsafe_allow_html=True)
     
+    # Logo Section
     col_img = st.columns([1])[0]
     col_img.image("https://img.icons8.com/color/96/youtube-play.png", width=75)
     
-    st.markdown("---")
-    st.markdown("### ⚙️ Pengaturan Analisis")
-    st.markdown("Atur parameter untuk menganalisis komentar video YouTube Anda")
+    st.markdown("""
+    <div style='text-align: center; margin-bottom: 20px;'>
+        <p style='color: #888888; font-size: 12px; margin: 8px 0 0 0;'><strong>YouTube Sentiment Analysis</strong></p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    st.markdown("#### 📊 Jumlah Komentar")
-    st.markdown("Pilih jumlah komentar yang ingin dianalisis (100 - 5000)")
+    st.markdown("---")
+    
+    # Settings Section
+    st.markdown("""
+    <div style='margin-bottom: 15px;'>
+        <p style='color: #ffffff; font-size: 15px; font-weight: 600; margin: 0 0 5px 0;'>⚙️ Pengaturan Analisis</p>
+        <p style='color: #888888; font-size: 12px; margin: 0;'>Atur parameter untuk menganalisis komentar</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Comment Count Section
+    st.markdown("""
+    <div style='margin-bottom: 15px;'>
+        <p style='color: #cccccc; font-size: 13px; font-weight: 600; margin: 0 0 10px 0;'>📊 Jumlah Komentar</p>
+        <p style='color: #999999; font-size: 11px; margin: 0;'>Pilih jumlah yang ingin dianalisis (100 - 5000)</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
     col1, col2 = st.columns(2)
     with col1: 
         slider = st.slider("Slider", 100, 5000, 500, 100, label_visibility="collapsed")
@@ -239,123 +400,233 @@ with st.sidebar:
         manual = st.number_input("Manual", 100, 5000, slider, 100, label_visibility="collapsed")
     max_comments = manual
     
+    # Status Messages
     if max_comments > 2000: 
-        st.warning("⏱️ Jumlah komentar banyak, proses akan memakan waktu lebih lama")
-    elif max_comments > 1000:
-        st.info("✓ Jumlah komentar optimal untuk analisis")
+        st.markdown("""
+        <div style='background: rgba(255,150,0,0.15); border-left: 3px solid #ff9600; padding: 10px; border-radius: 6px; margin: 10px 0;'>
+            <p style='color: #ffb366; font-size: 12px; margin: 0;'><strong>⏱️ Catatan:</strong> Banyak komentar = proses lebih lama</p>
+        </div>
+        """, unsafe_allow_html=True)
+    elif max_comments >= 1000:
+        st.markdown("""
+        <div style='background: rgba(0,200,100,0.15); border-left: 3px solid #00c864; padding: 10px; border-radius: 6px; margin: 10px 0;'>
+            <p style='color: #66ff99; font-size: 12px; margin: 0;'><strong>✓ Optimal:</strong> Parameter sudah ideal untuk analisis cepat</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("#### 🎨 Visualisasi")
+    
+    # Visualization Section
+    st.markdown("""
+    <p style='color: #cccccc; font-size: 13px; font-weight: 600; margin: 15px 0 10px 0;'>🎨 Visualisasi</p>
+    """, unsafe_allow_html=True)
     show_wc = st.checkbox("☁️ Tampilkan Word Cloud", value=True)
     
     st.markdown("---")
+    
+    # Tips Box
     st.markdown("""
-    <div style='background: linear-gradient(135deg, #333333, #555555); padding: 15px; border-radius: 10px; text-align: center; margin-top: 20px;'>
-        <p style='color: white; margin: 0; font-size: 12px;'><strong>💡 Tips:</strong> Gunakan 500-1000 komentar untuk hasil optimal dan proses cepat</p>
+    <div style='background: linear-gradient(135deg, #2a2a2a, #333333); padding: 15px; border-radius: 10px; border: 1px solid #444444; margin: 20px 0;'>
+        <p style='color: #ffffff; font-size: 12px; font-weight: 600; margin: 0 0 8px 0;'>💡 Tips Penggunaan</p>
+        <ul style='color: #cccccc; font-size: 11px; margin: 0; padding-left: 20px;'>
+            <li>Gunakan 500-1000 komentar untuk hasil optimal</li>
+            <li>Model IndoBERT membutuhkan konteks kalimat penuh</li>
+            <li>Proses visualisasi dilakukan setelah analisis</li>
+        </ul>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("<p style='text-align: center; color: #888; font-size: 11px;'>v1.0 • Dark Mode • Indo RoBERTa</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #666666; font-size: 10px; margin-top: 20px;'>v1.0 • Dark Mode Modern • Indo RoBERTa</p>", unsafe_allow_html=True)
 
-url = st.text_input("Link YouTube", placeholder="https://www.youtube.com/watch?v=...")
+url = st.text_input("Link YouTube", placeholder="https://www.youtube.com/watch?v=...", help="Masukkan URL video YouTube yang ingin dianalisis")
 
 if not st.session_state.comments:
-    if st.button("Cari Video", type="secondary") and url:
-        vid = extract_video_id(url)
-        if vid:
-            info = fetch_video_info(vid)
-            if info:
-                st.session_state.video_info = info
-                st.session_state.video_id = vid
-                st.success(f"**{info['title']}**")
-                st.image(info['thumbnail_url'], width=500)
-            else: st.error("Video tidak ditemukan.")
-        else: st.error("Link tidak valid!")
+    col_btn1, col_btn2, col_placeholder = st.columns([2, 3, 2])
+    
+    with col_btn1:
+        if st.button("🔍 Cari Video", type="secondary", use_container_width=True) and url:
+            vid = extract_video_id(url)
+            if vid:
+                info = fetch_video_info(vid)
+                if info:
+                    st.session_state.video_info = info
+                    st.session_state.video_id = vid
+                    st.markdown("""
+                    <div style='background: rgba(0,200,100,0.15); border-left: 4px solid #00c864; padding: 15px; border-radius: 10px; margin: 10px 0;'>
+                        <p style='color: #66ff99; font-size: 13px; font-weight: 600; margin: 0;'>✓ Video Ditemukan</p>
+                        <p style='color: #cccccc; font-size: 12px; margin: 5px 0 0 0;'><strong>""" + info['title'] + """</strong></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.image(info['thumbnail_url'], use_container_width=True)
+                else: 
+                    st.markdown("""
+                    <div style='background: rgba(200,0,0,0.15); border-left: 4px solid #c80000; padding: 12px; border-radius: 10px;'>
+                        <p style='color: #ff6666; font-size: 12px; margin: 0;'><strong>✗ Video tidak ditemukan</strong></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else: 
+                st.markdown("""
+                <div style='background: rgba(200,0,0,0.15); border-left: 4px solid #c80000; padding: 12px; border-radius: 10px;'>
+                    <p style='color: #ff6666; font-size: 12px; margin: 0;'><strong>✗ Link YouTube tidak valid</strong></p>
+                </div>
+                """, unsafe_allow_html=True)
 
     if st.session_state.video_info and not st.session_state.comments:
-        if st.button("Mulai Analisis Sentimen", type="primary"):
-            with st.spinner("Proses penuh sedang berjalan..."):
-                comments, timestamps = fetch_comments(st.session_state.video_id, max_comments)
-                if comments:
-                    result = analyze_sentiment(comments, timestamps)
-                    c, p, v, s, texts, data, scores, tfidf_words, texts_original = result
-                    st.session_state.update({
-                        'comments': comments, 'timestamps': timestamps, 'counts': c, 'percentages': p,
-                        'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words, 'sentiment_texts_original': texts_original
-                    })
-                    st.success("Selesai!"); st.rerun()
+        with col_btn2:
+            if st.button("▶️ Mulai Analisis Sentimen", type="primary", use_container_width=True):
+                with st.spinner("🔄 Menganalisis komentar..."):
+                    comments, timestamps = fetch_comments(st.session_state.video_id, max_comments)
+                    if comments:
+                        result = analyze_sentiment(comments, timestamps)
+                        c, p, v, s, texts, data, scores, tfidf_words, texts_original = result
+                        st.session_state.update({
+                            'comments': comments, 'timestamps': timestamps, 'counts': c, 'percentages': p,
+                            'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words, 'sentiment_texts_original': texts_original
+                        })
+                        st.success("✓ Analisis selesai!"); st.rerun()
 
 if st.session_state.comments:
-    tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Charts Dasar", "Insight Detail", "Sample Komentar"])
+    st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 30px 0;'>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin-bottom: 30px;'>📊 Hasil Analisis Sentimen</h2>", unsafe_allow_html=True)
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Overview", "📉 Statistik", "🔍 Insight Detail", "💬 Sample"])
 
     with tab1:
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Positif", f"{st.session_state.percentages['positive']}%", f"{st.session_state.counts['positive']} komentar")
-        col2.metric("Netral", f"{st.session_state.percentages['neutral']}%", f"{st.session_state.counts['neutral']} komentar")
-        col3.metric("Negatif", f"{st.session_state.percentages['negative']}%", f"{st.session_state.counts['negative']} komentar")
-        st.success(f"Total dianalisis: {st.session_state.valid_comments} komentar")
+        # Metrics dengan styling modern
+        col1, col2, col3 = st.columns(3, gap="medium")
+        
+        with col1:
+            st.markdown("""
+            <div style='background: linear-gradient(135deg, #1a3a1a, #2a5a2a); padding: 20px; border-radius: 12px; border: 1px solid #3a7a3a; text-align: center;'>
+                <p style='color: #88dd88; font-size: 12px; margin: 0 0 8px 0;'>POSITIF</p>
+                <p style='color: #00ff00; font-size: 32px; font-weight: 700; margin: 0;'>""" + str(st.session_state.percentages['positive']) + """%</p>
+                <p style='color: #66cc66; font-size: 12px; margin: 8px 0 0 0;'>""" + str(st.session_state.counts['positive']) + """ komentar</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("""
+            <div style='background: linear-gradient(135deg, #3a3a1a, #5a5a2a); padding: 20px; border-radius: 12px; border: 1px solid #7a7a3a; text-align: center;'>
+                <p style='color: #dddd88; font-size: 12px; margin: 0 0 8px 0;'>NETRAL</p>
+                <p style='color: #ffff00; font-size: 32px; font-weight: 700; margin: 0;'>""" + str(st.session_state.percentages['neutral']) + """%</p>
+                <p style='color: #cccc66; font-size: 12px; margin: 8px 0 0 0;'>""" + str(st.session_state.counts['neutral']) + """ komentar</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown("""
+            <div style='background: linear-gradient(135deg, #3a1a1a, #5a2a2a); padding: 20px; border-radius: 12px; border: 1px solid #7a3a3a; text-align: center;'>
+                <p style='color: #dd8888; font-size: 12px; margin: 0 0 8px 0;'>NEGATIF</p>
+                <p style='color: #ff4488; font-size: 32px; font-weight: 700; margin: 0;'>""" + str(st.session_state.percentages['negative']) + """%</p>
+                <p style='color: #cc6666; font-size: 12px; margin: 8px 0 0 0;'>""" + str(st.session_state.counts['negative']) + """ komentar</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='background: linear-gradient(135deg, #2a2a2a, #3a3a3a); padding: 15px; border-radius: 10px; border: 1px solid #444444;'>
+            <p style='color: #cccccc; font-size: 13px; margin: 0;'><strong>📝 Total Komentar Dianalisis:</strong> """ + str(st.session_state.valid_comments) + """ komentar</p>
+        </div>
+        """, unsafe_allow_html=True)
 
     with tab2:
+        st.markdown("<p style='color: #999999; font-size: 13px; margin-bottom: 20px;'>Pie chart distribusi sentimen dari seluruh komentar yang dianalisis</p>", unsafe_allow_html=True)
         fig = px.pie(values=list(st.session_state.percentages.values()),
                      names=["Positif","Netral","Negatif"],
                      color_discrete_sequence=["#00ff88","#ffff88","#ff4488"],
-                     template="plotly_dark")
+                     template="plotly_dark",
+                     hole=0.3)
+        fig.update_layout(height=450, font=dict(size=12))
         st.plotly_chart(fig, use_container_width=True)
 
     with tab3:
         if show_wc:
-            st.subheader("Word Cloud Per Sentimen")
-            cols = st.columns(3)
+            st.markdown("<h3 style='margin-top: 0;'>☁️ Word Cloud Per Sentimen</h3>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #999999; font-size: 12px; margin-top: -15px;'>Visualisasi kata-kata yang paling sering muncul (sudah dibersihkan dari stopwords)</p>", unsafe_allow_html=True)
+            cols = st.columns(3, gap="medium")
             for i, sent in enumerate(["positive", "negative", "neutral"]):
                 wc = generate_wordcloud(' '.join(st.session_state.sentiment_texts[sent]))
-                if wc: cols[i].image(wc, caption=sent.capitalize())
+                if wc: 
+                    with cols[i]:
+                        st.image(wc, caption=f"Sentimen: {sent.upper()}", use_container_width=True)
+            st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 30px 0;'>", unsafe_allow_html=True)
 
-        st.subheader("Top Kata Paling Banyak Per Sentimen")
-        cols = st.columns(3)
+        st.markdown("<h3>🏆 Top 10 Kata Paling Sering Muncul Per Sentimen</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #999999; font-size: 12px; margin-top: -15px;'>Frekuensi kemunculan kata dalam komentar (tanpa stopwords)</p>", unsafe_allow_html=True)
+        cols = st.columns(3, gap="medium")
         for i, sent in enumerate(["positive", "negative", "neutral"]):
-            top = Counter(' '.join(st.session_state.sentiment_texts[sent]).split()).most_common(10)
-            if top:
-                df = pd.DataFrame(top, columns=['Kata', 'Frekuensi'])
-                fig_top = px.bar(df, x='Frekuensi', y='Kata', orientation='h', template="plotly_dark", title=sent.capitalize())
-                cols[i].plotly_chart(fig_top, use_container_width=True)
-
-        st.subheader("Kata Berpengaruh (TF-IDF) Per Sentimen")
-        cols = st.columns(3)
+            with cols[i]:
+                top = Counter(' '.join(st.session_state.sentiment_texts[sent]).split()).most_common(10)
+                if top:
+                    df = pd.DataFrame(top, columns=['Kata', 'Frekuensi'])
+                    fig_top = px.bar(df, x='Frekuensi', y='Kata', orientation='h', 
+                                    template="plotly_dark", title=f"{sent.upper()}",
+                                    color='Frekuensi', color_continuous_scale='Viridis')
+                    fig_top.update_layout(height=400, showlegend=False, font=dict(size=11))
+                    st.plotly_chart(fig_top, use_container_width=True)
+        
+        st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 30px 0;'>", unsafe_allow_html=True)
+        st.markdown("<h3>⭐ Kata Berpengaruh (TF-IDF) Per Sentimen</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #999999; font-size: 12px; margin-top: -15px;'>Kata yang paling signifikan untuk setiap kategori sentimen</p>", unsafe_allow_html=True)
+        cols = st.columns(3, gap="medium")
         for i, sent in enumerate(["positive", "negative", "neutral"]):
-            top_tfidf = st.session_state.tfidf_words[sent]
-            if top_tfidf:
-                df_tfidf = pd.DataFrame(top_tfidf, columns=['Kata', 'Score'])
-                fig_tfidf = px.bar(df_tfidf, x='Score', y='Kata', orientation='h', template="plotly_dark", title=sent.capitalize())
-                cols[i].plotly_chart(fig_tfidf, use_container_width=True)
-
-        st.subheader("Distribusi Confidence Score Per Sentimen")
+            with cols[i]:
+                top_tfidf = st.session_state.tfidf_words[sent]
+                if top_tfidf:
+                    df_tfidf = pd.DataFrame(top_tfidf, columns=['Kata', 'Score'])
+                    fig_tfidf = px.bar(df_tfidf, x='Score', y='Kata', orientation='h', 
+                                      template="plotly_dark", title=f"{sent.upper()}",
+                                      color='Score', color_continuous_scale='Turbo')
+                    fig_tfidf.update_layout(height=400, showlegend=False, font=dict(size=11))
+                    st.plotly_chart(fig_tfidf, use_container_width=True)
+        
+        st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 30px 0;'>", unsafe_allow_html=True)
+        st.markdown("<h3>📊 Distribusi Confidence Score Per Sentimen</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #999999; font-size: 12px; margin-top: -15px;'>Tingkat kepercayaan prediksi model IndoBERT</p>", unsafe_allow_html=True)
         score_df = pd.DataFrame()
         for sent in ["positive", "negative", "neutral"]:
             if st.session_state.scores[sent]:
                 temp_df = pd.DataFrame({'Sentimen': sent, 'Score': st.session_state.scores[sent]})
                 score_df = pd.concat([score_df, temp_df])
-        fig_box = px.box(score_df, x='Sentimen', y='Score', template="plotly_dark", title="Distribusi Score")
+        fig_box = px.box(score_df, x='Sentimen', y='Score', template="plotly_dark", 
+                        title="Box Plot Distribusi Score", color='Sentimen',
+                        color_discrete_map={'positive': '#00ff88', 'neutral': '#ffff88', 'negative': '#ff4488'})
+        fig_box.update_layout(height=450, font=dict(size=12))
         st.plotly_chart(fig_box, use_container_width=True)
-
-        st.subheader("Tren Sentimen Over Time")
+        
+        st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 30px 0;'>", unsafe_allow_html=True)
+        st.markdown("<h3>📈 Tren Sentimen Over Time</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #999999; font-size: 12px; margin-top: -15px;'>Perubahan sentimen komentar setiap 6 jam</p>", unsafe_allow_html=True)
         if st.session_state.sentiment_data:
             df = pd.DataFrame(st.session_state.sentiment_data)
             df['date'] = pd.to_datetime(df['date']).dt.floor('H')
             dfg = df.groupby([pd.Grouper(key='date', freq='6H'), 'sentimen']).size().unstack(fill_value=0)
-            fig = px.line(dfg, template="plotly_dark", title="Tren per 6 Jam")
+            fig = px.line(dfg, template="plotly_dark", title="Tren Sentimen per 6 Jam",
+                         markers=True, line_shape='spline')
+            fig.update_layout(height=450, font=dict(size=12), hovermode='x unified')
             st.plotly_chart(fig, use_container_width=True)
 
     with tab4:
+        st.markdown("<p style='color: #999999; font-size: 12px; margin-bottom: 20px;'>Contoh komentar dari setiap kategori sentimen</p>", unsafe_allow_html=True)
         for sent in ["positive", "neutral", "negative"]:
-            with st.expander(f"{sent.capitalize()} (contoh)"):
-                for c in st.session_state.samples[sent]:
-                    st.write(f"• {c}")
+            with st.expander(f"💬 {sent.upper()} - {len(st.session_state.samples[sent])} Contoh", expanded=False):
+                if st.session_state.samples[sent]:
+                    for idx, c in enumerate(st.session_state.samples[sent], 1):
+                        st.markdown(f"""
+                        <div style='background: #1a1a1a; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 3px solid {'#00ff88' if sent == 'positive' else '#ffff88' if sent == 'neutral' else '#ff4488'};'>
+                            <p style='color: #cccccc; font-size: 12px; margin: 0;'><strong>{idx}.</strong> {c}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-    st.divider()
-    if st.button("Analisis Video Lain", type="primary"):
-        keys = ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original']
-        for k in keys: st.session_state[k] = None
-        st.rerun()
+    st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 40px 0 20px 0;'>", unsafe_allow_html=True)
+    
+    col_btn_reset1, col_btn_reset2, col_btn_reset3 = st.columns([2, 2, 3])
+    with col_btn_reset1:
+        if st.button("🔄 Analisis Video Lain", type="primary", use_container_width=True):
+            keys = ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original']
+            for k in keys: st.session_state[k] = None
+            st.rerun()
 
-st.caption("© 2025 — Dark Mode Edition | Indo RoBERTa | Dibuat bareng Grok")
+st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 40px 0 20px 0;'>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #666666; font-size: 11px; margin: 0;'>© 2025 • YouTube Sentiment Analyzer • Dark Mode Modern Edition v1.0</p>", unsafe_allow_html=True)
