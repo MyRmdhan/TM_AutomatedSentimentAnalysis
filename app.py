@@ -1,4 +1,4 @@
-# app.py — FINAL DARK MODE + SEMUA FITUR + 100% JALAN DI CLOUD
+# app.py — VERSI FINAL DARK MODE + VISUALISASI LEBIH VARIATIF & INFORMATIF + SEMUA FITUR KAMU MINTA
 import streamlit as st
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -11,6 +11,8 @@ from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import pandas as pd
 from datetime import datetime
+from collections import Counter
+from sklearn.feature_extraction.text import TfidfVectorizer  # Tambah buat TF-IDF kata berpengaruh
 
 # ================== API KEY ==================
 API_KEY = st.secrets["YOUTUBE_API_KEY"]
@@ -119,12 +121,13 @@ def analyze_sentiment(comments, timestamps):
             valid_timestamps.append(ts)
 
     if not cleaned:
-        return {}, {}, 0, {}, {}, []
+        return {}, {}, 0, {}, {}, [], []
 
     sentiments = {"positive": 0, "negative": 0, "neutral": 0}
     samples = {"positive": [], "negative": [], "neutral": []}
     texts = {"positive": [], "negative": [], "neutral": []}
     data = []
+    scores = {"positive": [], "negative": [], "neutral": []}  # Tambah buat distribution scores
 
     status = st.empty()
     status.info("Menganalisis sentimen...")
@@ -139,6 +142,7 @@ def analyze_sentiment(comments, timestamps):
             label = r['label'].lower()
             sentiments[label] += 1
             texts[label].append(com)
+            scores[label].append(r['score'])  # Tambah score buat box plot
             if len(samples[label]) < 5:
                 samples[label].append(com)
             data.append({'date': datetime.fromisoformat(ts.replace('Z','+00:00')), 'sentimen': label})
@@ -147,7 +151,18 @@ def analyze_sentiment(comments, timestamps):
 
     percentages = {k: round(v/total*100, 2) for k, v in sentiments.items()}
     status.success("Analisis selesai!")
-    return sentiments, percentages, total, samples, texts, data
+
+    # Tambah TF-IDF buat kata berpengaruh
+    tfidf = TfidfVectorizer(max_features=20)
+    tfidf_docs = [ ' '.join(texts[sent]) for sent in ['positive', 'negative', 'neutral'] ]
+    tfidf.fit(tfidf_docs)
+    tfidf_words = {}
+    for i, sent in enumerate(['positive', 'negative', 'neutral']):
+        feature_names = tfidf.get_feature_names_out()
+        scores_vec = tfidf.transform([tfidf_docs[i]]).toarray()[0]
+        tfidf_words[sent] = sorted([(feature_names[j], scores_vec[j]) for j in range(len(scores_vec))], key=lambda x: x[1], reverse=True)
+
+    return sentiments, percentages, total, samples, texts, data, scores, tfidf_words
 
 def generate_wordcloud(text):
     if not text: return None
@@ -161,14 +176,13 @@ def generate_wordcloud(text):
     return buf
 
 # ================== SESSION STATE ==================
-keys = ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data']
-for k in keys:
+for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words']:
     if k not in st.session_state:
         st.session_state[k] = None
 
 # ================== UI ==================
 st.title("YouTube Sentiment Analyzer")
-st.markdown("**Dark Mode • Indo RoBERTa • Insight Detail • Siap Presentasi UAS**")
+st.markdown("**Dark Mode • Indo RoBERTa • Insight Lebih Variatif & Detail • Siap Presentasi UAS**")
 
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/youtube-play.png")
@@ -199,15 +213,15 @@ if st.session_state.video_info and not st.session_state.comments:
         with st.spinner("Proses penuh sedang berjalan..."):
             comments, timestamps = fetch_comments(st.session_state.video_id, max_comments)
             if comments:
-                c, p, v, s, texts, data = analyze_sentiment(comments, timestamps)
+                c, p, v, s, texts, data, scores, tfidf_words = analyze_sentiment(comments, timestamps)
                 st.session_state.update({
                     'comments': comments, 'timestamps': timestamps, 'counts': c, 'percentages': p,
-                    'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data
+                    'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words
                 })
                 st.success("Selesai!"); st.rerun()
 
 if st.session_state.comments:
-    tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Charts", "Insight Detail", "Sample"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Charts Dasar", "Insight Detail", "Sample Komentar"])
 
     with tab1:
         col1, col2, col3 = st.columns(3)
@@ -231,11 +245,39 @@ if st.session_state.comments:
                 wc = generate_wordcloud(' '.join(st.session_state.sentiment_texts[sent]))
                 if wc: cols[i].image(wc, caption=sent.capitalize())
 
+        st.subheader("Top Kata Paling Banyak Per Sentimen")
+        cols = st.columns(3)
+        for i, sent in enumerate(["positive", "negative", "neutral"]):
+            top = Counter(' '.join(st.session_state.sentiment_texts[sent]).split()).most_common(10)
+            if top:
+                df = pd.DataFrame(top, columns=['Kata', 'Frekuensi'])
+                fig_top = px.bar(df, x='Frekuensi', y='Kata', orientation='h', template="plotly_dark", title=sent.capitalize())
+                cols[i].plotly_chart(fig_top, use_container_width=True)
+
+        st.subheader("Kata Berpengaruh (TF-IDF) Per Sentimen")
+        cols = st.columns(3)
+        for i, sent in enumerate(["positive", "negative", "neutral"]):
+            top_tfidf = st.session_state.tfidf_words[sent]
+            if top_tfidf:
+                df_tfidf = pd.DataFrame(top_tfidf, columns=['Kata', 'Score'])
+                fig_tfidf = px.bar(df_tfidf, x='Score', y='Kata', orientation='h', template="plotly_dark", title=sent.capitalize())
+                cols[i].plotly_chart(fig_tfidf, use_container_width=True)
+
+        st.subheader("Distribusi Confidence Score Per Sentimen")
+        score_df = pd.DataFrame()
+        for sent in ["positive", "negative", "neutral"]:
+            if st.session_state.scores[sent]:
+                temp_df = pd.DataFrame({'Sentimen': sent, 'Score': st.session_state.scores[sent]})
+                score_df = pd.concat([score_df, temp_df])
+        fig_box = px.box(score_df, x='Sentimen', y='Score', template="plotly_dark", title="Distribusi Score")
+        st.plotly_chart(fig_box, use_container_width=True)
+
+        st.subheader("Tren Sentimen Over Time")
         if st.session_state.sentiment_data:
             df = pd.DataFrame(st.session_state.sentiment_data)
             df['date'] = pd.to_datetime(df['date']).dt.floor('H')
             dfg = df.groupby([pd.Grouper(key='date', freq='6H'), 'sentimen']).size().unstack(fill_value=0)
-            fig = px.line(dfg, template="plotly_dark", title="Tren Sentimen per 6 Jam")
+            fig = px.line(dfg, template="plotly_dark", title="Tren per 6 Jam")
             st.plotly_chart(fig, use_container_width=True)
 
     with tab4:
