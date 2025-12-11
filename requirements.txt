@@ -1,0 +1,10 @@
+streamlit
+google-api-python-client
+transformers
+torch
+plotly
+reportlab
+python-dotenv
+emoji
+wordcloud
+matplotlib
