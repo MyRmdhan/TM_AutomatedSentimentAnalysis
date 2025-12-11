@@ -60,6 +60,18 @@ def load_sentiment_model():
 nlp = load_sentiment_model()
 
 # ================== FUNGSI ==================
+# Indonesian stopwords untuk visualisasi saja
+INDO_STOPWORDS = {
+    'yang', 'dan', 'di', 'ke', 'dari', 'untuk', 'adalah', 'pada', 'atau', 'tidak',
+    'ini', 'itu', 'dengan', 'oleh', 'akan', 'telah', 'sudah', 'dapat', 'juga',
+    'lebih', 'pula', 'dalam', 'ada', 'karena', 'bagian', 'anda', 'saya', 'dia',
+    'mereka', 'kami', 'kalian', 'aku', 'kamu', 'dia', 'ia', 'nya',
+    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+    'should', 'may', 'might', 'can', 'it', 'its', 'of', 'in', 'on', 'at',
+    'to', 'as', 'by', 'or', 'but', 'if', 'because', 'so'
+}
+
 def extract_video_id(url):
     match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
     return match.group(1) if match else None
@@ -111,6 +123,12 @@ def clean_comment(text):
     text = re.sub(r'\s+', ' ', text).strip().lower()
     return text
 
+def clean_for_visualization(text):
+    """Hapus stopwords dari teks untuk kepentingan visualisasi saja"""
+    words = text.split()
+    filtered = [w for w in words if w not in INDO_STOPWORDS and len(w) > 2]
+    return ' '.join(filtered)
+
 def analyze_sentiment(comments, timestamps):
     cleaned = []
     valid_timestamps = []
@@ -121,19 +139,21 @@ def analyze_sentiment(comments, timestamps):
             valid_timestamps.append(ts)
 
     if not cleaned:
-        return {}, {}, 0, {}, {}, [], []
+        return {}, {}, 0, {}, {}, {}, [], [], {}
 
     sentiments = {"positive": 0, "negative": 0, "neutral": 0}
     samples = {"positive": [], "negative": [], "neutral": []}
-    texts = {"positive": [], "negative": [], "neutral": []}
+    texts_original = {"positive": [], "negative": [], "neutral": []}  # Teks asli untuk IndoBERT
+    texts_clean = {"positive": [], "negative": [], "neutral": []}  # Teks bersih untuk visualisasi
     data = []
-    scores = {"positive": [], "negative": [], "neutral": []}  # Tambah buat distribution scores
+    scores = {"positive": [], "negative": [], "neutral": []}
 
     status = st.empty()
     status.info("Menganalisis sentimen...")
     total = len(cleaned)
     batch_size = 64
 
+    # Step 1: Kirim teks asli ke IndoBERT untuk analisis
     for i in range(0, total, batch_size):
         batch = cleaned[i:i+batch_size]
         batch_ts = valid_timestamps[i:i+batch_size]
@@ -141,8 +161,14 @@ def analyze_sentiment(comments, timestamps):
         for r, com, ts in zip(results, batch, batch_ts):
             label = r['label'].lower()
             sentiments[label] += 1
-            texts[label].append(com)
-            scores[label].append(r['score'])  # Tambah score buat box plot
+            texts_original[label].append(com)  # Simpan teks asli
+            
+            # Bersihkan untuk visualisasi
+            clean_text = clean_for_visualization(com)
+            if clean_text:  # Hanya simpan jika ada kata setelah pembersihan
+                texts_clean[label].append(clean_text)
+            
+            scores[label].append(r['score'])
             if len(samples[label]) < 5:
                 samples[label].append(com)
             data.append({'date': datetime.fromisoformat(ts.replace('Z','+00:00')), 'sentimen': label})
@@ -152,17 +178,21 @@ def analyze_sentiment(comments, timestamps):
     percentages = {k: round(v/total*100, 2) for k, v in sentiments.items()}
     status.success("Analisis selesai!")
 
-    # Tambah TF-IDF buat kata berpengaruh
+    # Step 2: Hitung TF-IDF menggunakan teks bersih untuk visualisasi
     tfidf = TfidfVectorizer(max_features=20)
-    tfidf_docs = [ ' '.join(texts[sent]) for sent in ['positive', 'negative', 'neutral'] ]
-    tfidf.fit(tfidf_docs)
-    tfidf_words = {}
-    for i, sent in enumerate(['positive', 'negative', 'neutral']):
-        feature_names = tfidf.get_feature_names_out()
-        scores_vec = tfidf.transform([tfidf_docs[i]]).toarray()[0]
-        tfidf_words[sent] = sorted([(feature_names[j], scores_vec[j]) for j in range(len(scores_vec))], key=lambda x: x[1], reverse=True)
+    tfidf_docs = [' '.join(texts_clean[sent]) for sent in ['positive', 'negative', 'neutral']]
+    # Cek apakah ada dokumen kosong
+    if all(doc.strip() for doc in tfidf_docs):
+        tfidf.fit(tfidf_docs)
+        tfidf_words = {}
+        for i, sent in enumerate(['positive', 'negative', 'neutral']):
+            feature_names = tfidf.get_feature_names_out()
+            scores_vec = tfidf.transform([tfidf_docs[i]]).toarray()[0]
+            tfidf_words[sent] = sorted([(feature_names[j], scores_vec[j]) for j in range(len(scores_vec))], key=lambda x: x[1], reverse=True)
+    else:
+        tfidf_words = {"positive": [], "negative": [], "neutral": []}
 
-    return sentiments, percentages, total, samples, texts, data, scores, tfidf_words
+    return sentiments, percentages, total, samples, texts_clean, data, scores, tfidf_words, texts_original
 
 def generate_wordcloud(text):
     if not text: return None
@@ -176,7 +206,7 @@ def generate_wordcloud(text):
     return buf
 
 # ================== SESSION STATE ==================
-for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words']:
+for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original']:
     if k not in st.session_state:
         st.session_state[k] = None
 
@@ -249,10 +279,10 @@ if not st.session_state.comments:
                 comments, timestamps = fetch_comments(st.session_state.video_id, max_comments)
                 if comments:
                     result = analyze_sentiment(comments, timestamps)
-                    c, p, v, s, texts, data, scores, tfidf_words = result
+                    c, p, v, s, texts, data, scores, tfidf_words, texts_original = result
                     st.session_state.update({
                         'comments': comments, 'timestamps': timestamps, 'counts': c, 'percentages': p,
-                        'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words
+                        'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words, 'sentiment_texts_original': texts_original
                     })
                     st.success("Selesai!"); st.rerun()
 
@@ -324,7 +354,7 @@ if st.session_state.comments:
 
     st.divider()
     if st.button("Analisis Video Lain", type="primary"):
-        keys = ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words']
+        keys = ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original']
         for k in keys: st.session_state[k] = None
         st.rerun()
 
