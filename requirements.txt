@@ -7,4 +7,5 @@ reportlab
 emoji
 wordcloud
 matplotlib
+scikit-learn
 kaleido==0.2.1
