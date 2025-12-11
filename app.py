@@ -1,4 +1,4 @@
-# app.py — FINAL: IndoBERT PAKAI TEKS ASLI, VISUALISASI PAKAI TEKS BERSIH (STOPWORD)
+# app.py — FINAL: DARK MODE + STOPWORD KHUSUS VISUALISASI + 100% JALAN!
 import streamlit as st
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -6,13 +6,14 @@ import re
 import emoji
 from transformers import pipeline
 import plotly.express as px
+from io import BytesIO  # INI YANG LUPA DIIMPORT! SUDAH DITAMBAH
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import pandas as pd
 from datetime import datetime
 from collections import Counter
 
-# ================== STOPWORDS BAHASA INDONESIA ==================
+# ================== STOPWORDS INDONESIA ==================
 INDONESIAN_STOPWORDS = {
     'yang', 'di', 'ke', 'dari', 'dan', 'dengan', 'untuk', 'pada', 'adalah', 'ini', 'itu',
     'saya', 'kamu', 'dia', 'kami', 'kita', 'mereka', 'aku', 'gue', 'lo', 'lu', 'gw',
@@ -46,21 +47,21 @@ def load_model():
 
 nlp = load_model()
 
-# ================== FUNGSI PREPROCESSING ==================
-def clean_for_model(text):  # Hanya bersih ringan — dipakai IndoBERT
+# ================== PREPROCESSING ==================
+def clean_for_model(text):
     text = emoji.replace_emoji(text, "")
     text = re.sub(r'http[s]?://\S+', '', text)
     text = re.sub(r'[\n\r]+', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip().lower()
     return text
 
-def clean_for_visualization(text):  # Bersih + hapus stopword — hanya untuk visualisasi
+def clean_for_visualization(text):
     text = clean_for_model(text)
     words = text.split()
     words = [w for w in words if w not in INDONESIAN_STOPWORDS and len(w) > 2]
     return ' '.join(words)
 
-# ================== FUNGSI LAINNYA ==================
+# ================== FUNGSI LAIN ==================
 def extract_video_id(url):
     match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
     return match.group(1) if match else None
@@ -106,17 +107,16 @@ def fetch_comments(video_id, max_comments):
     return comments, timestamps
 
 def analyze_sentiment(comments, timestamps):
-    # Gunakan teks asli untuk model
     model_texts = [clean_for_model(c) for c in comments]
-    model_texts = [t for t in model_texts if len(t) > 10]
-    valid_indices = [i for i, t in enumerate([clean_for_model(c) for c in comments]) if len(t) > 10]
+    valid_indices = [i for i, t in enumerate(model_texts) if len(t) > 10]
+    model_texts = [model_texts[i] for i in valid_indices]
     valid_timestamps = [timestamps[i] for i in valid_indices]
 
-    if not model_texts: return {}, {}, 0, {}, {}, [], []
+    if not model_texts: return {}, {}, 0, {}, {}, []
 
     sentiments = {"positive": 0, "negative": 0, "neutral": 0}
     samples = {"positive": [], "negative": [], "neutral": []}
-    clean_texts = {"positive": [], "negative": [], "neutral": []}  # Untuk visualisasi (sudah bersih stopword)
+    clean_texts = {"positive": [], "negative": [], "neutral": []}
     data = []
 
     status = st.empty()
@@ -124,27 +124,30 @@ def analyze_sentiment(comments, timestamps):
     for i in range(0, len(model_texts), 64):
         batch = model_texts[i:i+64]
         results = nlp(batch)
-        for r, raw_text, ts in zip(results, [comments[valid_indices[j]] for j in range(i, min(i+64, len(valid_indices)))], valid_timestamps[i:i+64]):
+        for r, idx in zip(results, valid_indices[i:i+64]):
             label = r['label'].lower()
+            original_comment = comments[idx]
             sentiments[label] += 1
-            clean_vis = clean_for_visualization(raw_text)
+            clean_vis = clean_for_visualization(original_comment)
             clean_texts[label].append(clean_vis)
-            if len(samples[label]) < 5: samples[label].append(raw_text[:200] + "...")
-            data.append({'date': datetime.fromisoformat(ts.replace('Z','+00:00')), 'sentimen': label})
+            if len(samples[label]) < 5: samples[label].append(original_comment[:200] + "...")
+            data.append({'date': datetime.fromisoformat(timestamps[idx].replace('Z','+00:00')), 'sentimen': label})
 
     percentages = {k: round(v/len(model_texts)*100, 2) for k, v in sentiments.items()}
     status.success("Analisis selesai!")
     return sentiments, percentages, len(model_texts), samples, clean_texts, data
 
 def generate_wordcloud(text):
-    if not text: return None
+    if not text or len(text.strip()) == 0:
+        return None
     wc = WordCloud(width=800, height=400, background_color='#0f0f23', colormap='viridis', max_words=100).generate(text)
     fig, ax = plt.subplots(figsize=(10,5), facecolor='#0f0f23')
     ax.imshow(wc, interpolation='bilinear')
     ax.axis('off')
     buf = BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight', facecolor='#0f0f23', dpi=150)
-    buf.seek(0); plt.close()
+    buf.seek(0)
+    plt.close()
     return buf
 
 # ================== SESSION STATE ==================
@@ -153,7 +156,7 @@ for k in ['video_info','video_id','comments','timestamps','counts','percentages'
 
 # ================== UI ==================
 st.title("YouTube Sentiment Analyzer")
-st.markdown("**Dark Mode • IndoBERT Pakai Teks Asli • Visualisasi Pakai Teks Bersih (Tanpa Stopword)**")
+st.markdown("**Dark Mode • IndoBERT Pakai Teks Asli • Visualisasi Super Bersih (Stopword Dihapus)**")
 
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/youtube-play.png")
@@ -230,4 +233,4 @@ if st.session_state.comments:
             st.session_state[k] = None
         st.rerun()
 
-st.caption("© 2025 — Dark Mode • IndoBERT Akurat • Visualisasi Bersih • Dibuat bareng Grok")
+st.caption("© 2025 — Final Version | IndoBERT Akurat | Visualisasi Bersih | Dibuat bareng Grok")
