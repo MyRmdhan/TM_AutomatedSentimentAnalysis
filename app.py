@@ -22,31 +22,31 @@ st.set_page_config(page_title="YT Sentiment Analyzer", layout="wide")
 st.markdown("""
 <style>
     .stApp {
-        background: linear-gradient(135deg, #0f0f23, #1a1a2e);
+        background: linear-gradient(135deg, #0a0a0a, #1a1a1a);
         color: #e0e0e0;
     }
     .stButton>button {
-        background: linear-gradient(45deg, #00d4ff, #090979);
-        color: white;
+        background: linear-gradient(45deg, #ffffff, #888888);
+        color: #000000;
         border-radius: 16px;
         font-weight: bold;
         border: none;
         padding: 12px;
-        box-shadow: 0 4px 15px rgba(0,212,255,0.4);
+        box-shadow: 0 4px 15px rgba(255,255,255,0.2);
     }
     .stButton>button:hover {
         transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(0,212,255,0.6);
+        box-shadow: 0 8px 25px rgba(255,255,255,0.3);
     }
     .stTextInput>div>div>input {
-        background-color: #16213e;
+        background-color: #1a1a1a;
         color: white;
         border-radius: 12px;
-        border: 1px solid #00d4ff;
+        border: 1px solid #333333;
     }
-    h1, h2, h3, h4 {color: #00d4ff !important;}
+    h1, h2, h3, h4 {color: #ffffff !important;}
     .stMarkdown {color: #e0e0e0 !important;}
-    .stExpander {background-color: #16213e; border: 1px solid #00d4ff; border-radius: 10px;}
+    .stExpander {background-color: #1a1a1a; border: 1px solid #333333; border-radius: 10px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -188,13 +188,13 @@ with st.sidebar:
     st.markdown("""
     <style>
         [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0f0f23, #16213e);
+            background: linear-gradient(180deg, #0a0a0a, #1a1a1a);
         }
     </style>
     """, unsafe_allow_html=True)
     
     col_img = st.columns([1])[0]
-    col_img.image("https://img.icons8.com/color/96/youtube-play.png", use_container_width=True)
+    col_img.image("https://img.icons8.com/color/96/youtube-play.png", width=50)
     
     st.markdown("---")
     st.markdown("### ⚙️ Pengaturan Analisis")
@@ -220,7 +220,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("""
-    <div style='background: linear-gradient(135deg, #00d4ff, #090979); padding: 15px; border-radius: 10px; text-align: center; margin-top: 20px;'>
+    <div style='background: linear-gradient(135deg, #333333, #555555); padding: 15px; border-radius: 10px; text-align: center; margin-top: 20px;'>
         <p style='color: white; margin: 0; font-size: 12px;'><strong>💡 Tips:</strong> Gunakan 500-1000 komentar untuk hasil optimal dan proses cepat</p>
     </div>
     """, unsafe_allow_html=True)
