@@ -4,7 +4,6 @@ transformers
 torch
 plotly
 reportlab
-python-dotenv
 emoji
 wordcloud
 matplotlib

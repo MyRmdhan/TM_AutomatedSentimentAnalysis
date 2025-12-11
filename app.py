@@ -5,7 +5,6 @@ from googleapiclient.errors import HttpError  # Tambah buat handle quota error
 import re
 import emoji
 from transformers import pipeline
-from dotenv import load_dotenv
 import os
 import plotly.express as px
 from io import BytesIO
@@ -17,8 +16,7 @@ import matplotlib.pyplot as plt
 import time
 
 # ================== CONFIG ==================
-load_dotenv()
-API_KEY = os.getenv("YOUTUBE_API_KEY")
+API_KEY = st.secrets["YOUTUBE_API_KEY"]
 
 # Custom CSS (sama)
 st.markdown("""
