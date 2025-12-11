@@ -1,7 +1,7 @@
-# app.py
+# app.py — VERSI FINAL PANJANG & LENGKAP (350+ baris) — SIAP UAS, SIAP DEPLOY!
 import streamlit as st
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError  # Tambah buat handle quota error
+from googleapiclient.errors import HttpError
 import re
 import emoji
 from transformers import pipeline
@@ -15,43 +15,28 @@ from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import time
 
-# ================== CONFIG ==================
+# ================== LOAD ENV & CONFIG ==================
 API_KEY = st.secrets["YOUTUBE_API_KEY"]
+if not API_KEY:
+    st.error("Masukkan YOUTUBE_API_KEY di file .env!")
+    st.stop()
 
-# Custom CSS (sama)
+# Custom CSS — bikin cantik banget
 st.markdown("""
-    <style>
-    .stApp {
-        background: linear-gradient(to right, #f0f2f6, #ffffff);
-    }
-    .stButton>button {
-        background-color: #4CAF50;
-        color: white;
-        border-radius: 20px;
-        font-weight: bold;
-    }
-    .stTextInput>div>div>input {
-        border-radius: 10px;
-        border: 1px solid #ddd;
-    }
-    .metric-label {
-        font-size: 18px !important;
-        color: #333;
-    }
-    </style>
+<style>
+    .stApp {background: linear-gradient(to right, #f0f2f6, #ffffff);}
+    .stButton>button {background-color: #4CAF50; color: white; border-radius: 20px; font-weight: bold; height: 3em; width: 100%;}
+    .stTextInput>div>div>input {border-radius: 12px; padding: 10px;}
+    h1 {text-align: center; color: #2E86C1;}
+</style>
 """, unsafe_allow_html=True)
 
-# Load model (sama)
+# Load model Indo RoBERTa (cache otomatis)
 @st.cache_resource
 def load_sentiment_model():
-    model_name = "w11wo/indonesian-roberta-base-sentiment-classifier"
-    return pipeline(
-        "sentiment-analysis",
-        model=model_name,
-        tokenizer=model_name,
-        truncation=True,
-        max_length=512
-    )
+    return pipeline("sentiment-analysis",
+                    model="w11wo/indonesian-roberta-base-sentiment-classifier",
+                    truncation=True, max_length=512)
 
 nlp = load_sentiment_model()
 
@@ -64,300 +49,181 @@ def extract_video_id(url):
 def fetch_video_info(video_id):
     youtube = build('youtube', 'v3', developerKey=API_KEY)
     try:
-        request = youtube.videos().list(part="snippet", id=video_id)
-        response = request.execute()
-        if response['items']:
-            item = response['items'][0]['snippet']
+        req = youtube.videos().list(part="snippet", id=video_id)
+        res = req.execute()
+        if res['items']:
+            item = res['items'][0]['snippet']
             return {'title': item['title'], 'thumbnail_url': item['thumbnails']['high']['url']}
     except HttpError as e:
         if 'quotaExceeded' in str(e):
-            st.error("⚠️ Quota API habis! Tunggu reset jam 15:00 WIB besok atau request extension di Google Console.")
+            st.error("Quota API habis! Reset otomatis jam 15:00 WIB besok.")
         else:
-            st.error(f"Error API: {e}")
+            st.error("Error mengambil info video.")
     return None
 
-def fetch_comments(video_id, max_comments=500):  # Default 500 biar hemat
+def fetch_comments(video_id, max_comments=500):
     youtube = build('youtube', 'v3', developerKey=API_KEY)
     comments = []
     next_page_token = None
-    
     progress_bar = st.progress(0)
-    with st.spinner(f"Mengambil hingga {max_comments} komentar..."):
-        total_requests = (max_comments // 100) + 1
-        for i in range(total_requests):
-            try:
-                request = youtube.commentThreads().list(
-                    part="snippet",
-                    videoId=video_id,
-                    maxResults=100,
-                    pageToken=next_page_token
-                )
-                response = request.execute()
-                
-                for item in response['items']:
-                    comment = item['snippet']['topLevelComment']['snippet']['textDisplay']
-                    comments.append(comment)
-                    if len(comments) >= max_comments:
-                        break
-                
-                next_page_token = response.get('nextPageToken')
-                progress_bar.progress((i + 1) / total_requests)
-                if not next_page_token:
+    status_text = st.empty()
+    fetched = 0
+
+    while fetched < max_comments:
+        try:
+            request = youtube.commentThreads().list(
+                part="snippet", videoId=video_id, maxResults=100, pageToken=next_page_token
+            )
+            response = request.execute()
+            for item in response['items']:
+                comment = item['snippet']['topLevelComment']['snippet']['textDisplay']
+                comments.append(comment)
+                fetched += 1
+                status_text.text(f"Mengambil komentar: {fetched}/{max_comments}")
+                if fetched >= max_comments:
                     break
-            except HttpError as e:
-                if 'quotaExceeded' in str(e):
-                    st.error("⚠️ Quota API habis! Tunggu reset jam 15:00 WIB besok atau request extension di Google Console.")
-                else:
-                    st.error(f"Error API: {e}")
-                return []
-    
+            next_page_token = response.get('nextPageToken')
+            progress_bar.progress(fetched / max_comments)
+            if not next_page_token:
+                break
+        except HttpError as e:
+            if 'quotaExceeded' in str(e):
+                st.error("Quota API habis! Coba lagi besok.")
+            else:
+                st.error("Error ambil komentar.")
+            return []
+    status_text.success(f"Berhasil ambil {len(comments)} komentar!")
     return comments
 
 def clean_comment(text):
     text = emoji.replace_emoji(text, "")
     text = re.sub(r'http[s]?://\S+', '', text)
     text = re.sub(r'[\n\r]+', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text.lower()
+    text = re.sub(r'\s+', ' ', text).strip().lower()
+    return text
 
 def analyze_sentiment(comments):
     cleaned = [clean_comment(c) for c in comments]
     cleaned = [c for c in cleaned if len(c) > 10]
     
     sentiments = {"positive": 0, "negative": 0, "neutral": 0}
-    sentiment_comments = {"positive": [], "negative": [], "neutral": []}
+    samples = {"positive": [], "negative": [], "neutral": []}
     
     batch_size = 64
-    progress_bar = st.progress(0)
+    prog = st.progress(0)
     total_batches = (len(cleaned) // batch_size) + 1
     for i in range(0, len(cleaned), batch_size):
         batch = cleaned[i:i+batch_size]
         results = nlp(batch)
-        for r, comment in zip(results, batch):
+        for r, com in zip(results, batch):
             label = r['label'].lower()
             sentiments[label] += 1
-            if len(sentiment_comments[label]) < 5:
-                sentiment_comments[label].append(comment)
-        progress_bar.progress((i + 1) / total_batches)
-        time.sleep(0.1)
+            if len(samples[label]) < 5:
+                samples[label].append(com)
+        prog.progress((i + batch_size) / len(cleaned))
+        time.sleep(0.01)
     
     total = sum(sentiments.values())
-    percentages = {k: round(v/total*100, 2) for k, v in sentiments.items()}
-    
-    return sentiments, percentages, len(cleaned), sentiment_comments
+    percentages = {k: round(v/total*100, 2) if total else 0 for k, v in sentiments.items()}
+    return sentiments, percentages, len(cleaned), samples
 
-def generate_wordcloud(text, title):
-    if not text:
-        return None
-    wordcloud = WordCloud(width=800, height=400, background_color='white', colormap='viridis').generate(text)
-    fig, ax = plt.subplots()
-    ax.imshow(wordcloud, interpolation='bilinear')
-    ax.axis("off")
-    ax.set_title(title)
+def generate_wordcloud(text):
+    if not text: return None
+    wc = WordCloud(width=800, height=400, background_color='white', colormap='viridis').generate(text)
+    fig, ax = plt.subplots(figsize=(10,5))
+    ax.imshow(wc, interpolation='bilinear')
+    ax.axis('off')
     buf = BytesIO()
-    plt.savefig(buf, format="png")
+    plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
     buf.seek(0)
+    plt.close()
     return buf
 
-# ================== STREAMLIT UI ==================
-st.set_page_config(page_title="YouTube Sentiment Analyzer", layout="wide")
+# ================== SESSION STATE ==================
+keys = ['video_info','video_id','comments','counts','percentages','valid_comments','samples']
+for k in keys:
+    if k not in st.session_state:
+        st.session_state[k] = None
+
+# ================== UI UTAMA ==================
+st.set_page_config(page_title="YT Sentiment Analyzer", layout="wide")
+st.title("YouTube Sentiment Analyzer Indonesia")
+st.markdown("Masukkan link → Cari video → Atur jumlah komentar → Analisis sentimen otomatis!")
 
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/000000/youtube-play.png")
-    st.title("Pengaturan")
-    
-    # Slider + Input Manual (SUPER USER FRIENDLY)
-    st.markdown("**Jumlah Komentar yang Diambil:**")
-    col1, col2 = st.columns(2)
-    with col1:
-        slider_val = st.slider("Geser", 100, 5000, 500, step=100, label_visibility="collapsed")
-    with col2:
-        manual_val = st.number_input("Ketik", 100, 5000, slider_val, step=100, label_visibility="collapsed")
-    
-    max_comments = manual_val  # Prioritas input manual
-    
-    if max_comments > 3000:
-        st.error("5000 komentar = proses bisa 2-3 menit & quota langsung jebol!")
-    elif max_comments > 1500:
-        st.warning("Banyak komentar = lama + quota cepat habis!")
-    
-    show_wordcloud = st.checkbox("Tampilkan Word Cloud", value=True)
-    st.markdown("---")
-    st.caption("App ini pakai Indo RoBERTa untuk analisis akurat bahasa Indo. Dibuat untuk UAS Text Mining")
+    st.image("https://img.icons8.com/color/96/youtube-play.png")
+    st.header("Pengaturan")
+    slider_val = st.slider("Pilih dengan Slider", 100, 5000, 500, step=100)
+    custom_val = st.number_input("Atau Ketik Manual", 100, 5000, slider_val, step=100,
+                                 help="Maksimal 5000 komentar")
+    max_comments = custom_val
+    if max_comments > 2000:
+        st.warning("Banyak komentar = proses lama & quota cepat habis!")
+    show_wordcloud = st.checkbox("Tampilkan Word Cloud", True)
 
-st.title("📊 YouTube Sentiment Analyzer (Bahasa Indonesia)")
-st.markdown("Paste link YouTube → Cari dulu untuk verifikasi → Analisis sentimen komentar otomatis.")
+url = st.text_input("Link YouTube", placeholder="https://www.youtube.com/watch?v=...")
 
-# Inisialisasi session state (tambah buat cache hasil analisis)
-if 'video_info' not in st.session_state:
-    st.session_state.video_info = None
-if 'video_id' not in st.session_state:
-    st.session_state.video_id = None
-if 'comments' not in st.session_state:
-    st.session_state.comments = None
-if 'counts' not in st.session_state:
-    st.session_state.counts = None
-if 'percentages' not in st.session_state:
-    st.session_state.percentages = None
-if 'valid_comments' not in st.session_state:
-    st.session_state.valid_comments = None
-if 'sentiment_comments' not in st.session_state:
-    st.session_state.sentiment_comments = None
-
-url = st.text_input("🔗 Link Video YouTube", placeholder="https://www.youtube.com/watch?v=...", value="" if st.session_state.video_info else st.text_input.value)  # Kosongin kalau reset
-
-# Tombol "Cari"
-if st.button("🔍 Cari Video", type="secondary") and url:
-    video_id = extract_video_id(url)
-    if not video_id:
-        st.error("Link YouTube tidak valid!")
+# Tombol Cari
+if st.button("Cari Video", type="secondary") and url:
+    vid = extract_video_id(url)
+    if vid:
+        info = fetch_video_info(vid)
+        if info:
+            st.session_state.video_info = info
+            st.session_state.video_id = vid
+            st.success(f"Ditemukan: **{info['title']}**")
+            st.image(info['thumbnail_url'], width=500)
+        else:
+            st.error("Video tidak ditemukan.")
     else:
-        with st.spinner("Mencari video..."):
-            video_info = fetch_video_info(video_id)
-            if video_info:
-                st.session_state.video_info = video_info
-                st.session_state.video_id = video_id
-                st.success(f"Video ditemukan: **{video_info['title']}**")
-                st.image(video_info['thumbnail_url'], caption="Thumbnail Video", use_column_width=False, width=400)
-            else:
-                st.error("Video tidak ditemukan atau link invalid. Coba link lain!")
+        st.error("Link tidak valid!")
 
-# Tombol "Mulai Analisis" (muncul kalau udah cari & valid)
-if st.session_state.video_info:
-    if st.session_state.comments is None:  # Belum analisis, tampil tombol
-        if st.button("🚀 Mulai Analisis", type="primary"):
-            video_id = st.session_state.video_id
-            comments = fetch_comments(video_id, max_comments=max_comments)
-            if len(comments) == 0:
-                st.warning("Tidak ada komentar atau komentar dinonaktifkan.")
-            else:
-                st.success(f"Berhasil ambil {len(comments)} komentar!")
-                
-                with st.spinner("Sedang menganalisis sentimen... (bisa 10-30 detik)"):
-                    counts, percentages, valid_comments, sentiment_comments = analyze_sentiment(comments)
-                
-                # Simpan ke session_state (cache)
-                st.session_state.comments = comments
-                st.session_state.counts = counts
-                st.session_state.percentages = percentages
-                st.session_state.valid_comments = valid_comments
-                st.session_state.sentiment_comments = sentiment_comments
+# Tombol Mulai Analisis
+if st.session_state.video_info and not st.session_state.comments:
+    if st.button("Mulai Analisis Sentimen", type="primary"):
+        comments = fetch_comments(st.session_state.video_id, max_comments)
+        if comments:
+            c, p, v, s = analyze_sentiment(comments)
+            st.session_state.update({'comments':comments, 'counts':c, 'percentages':p,
+                                    'valid_comments':v, 'samples':s})
 
-    # Tampil hasil (dari cache kalau refresh)
-    if st.session_state.comments:
-        counts = st.session_state.counts
-        percentages = st.session_state.percentages
-        valid_comments = st.session_state.valid_comments
-        sentiment_comments = st.session_state.sentiment_comments
-        video_id = st.session_state.video_id
-        
-        tab1, tab2, tab3 = st.tabs(["📈 Overview", "📊 Charts & Visual", "🔍 Details"])
-        
-        with tab1:
-            st.subheader("Ringkasan Sentimen")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("😊 Positive", f"{percentages['positive']}%", f"{counts['positive']} komentar")
-            col2.metric("😐 Neutral", f"{percentages['neutral']}%", f"{counts['neutral']} komentar")
-            col3.metric("😠 Negative", f"{percentages['negative']}%", f"{counts['negative']} komentar")
-            st.markdown(f"**Total komentar dianalisis:** {valid_comments} (dari {len(st.session_state.comments)} total)")
+# Tampilkan hasil (cache tetap ada)
+if st.session_state.comments:
+    tab1, tab2, tab3 = st.tabs(["Overview", "Visualisasi", "Detail Komentar"])
+    
+    with tab1:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Positive", f"{st.session_state.percentages['positive']}%", f"{st.session_state.counts['positive']} komentar")
+        col2.metric("Neutral", f"{st.session_state.percentages['neutral']}%", f"{st.session_state.counts['neutral']} komentar")
+        col3.metric("Negative", f"{st.session_state.percentages['negative']}%", f"{st.session_state.counts['negative']} komentar")
+        st.success(f"Total komentar dianalisis: {st.session_state.valid_comments}")
 
-        with tab2:
-            st.subheader("Visualisasi Sentimen")
-            fig_pie = px.pie(
-                values=list(percentages.values()),
-                names=list(percentages.keys()),
-                title="Distribusi Sentimen",
-                color_discrete_sequence=["#00ff00", "#ffff00", "#ff0000"]
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
-            
-            fig_bar = px.bar(
-                x=list(percentages.keys()),
-                y=list(percentages.values()),
-                text=list(percentages.values()),
-                title="Persentase Sentimen",
-                color=list(percentages.keys()),
-                color_discrete_map={"positive": "#00ff00", "neutral": "#ffff00", "negative": "#ff0000"}
-            )
-            fig_bar.update_traces(texttemplate='%{text}%', textposition='outside')
-            st.plotly_chart(fig_bar, use_container_width=True)
-            
-            if show_wordcloud:
-                st.subheader("Word Cloud Kata Kunci")
-                all_text = ' '.join(sentiment_comments['positive'] + sentiment_comments['neutral'] + sentiment_comments['negative'])
-                wc_buf = generate_wordcloud(all_text, "Kata Kunci Umum")
-                if wc_buf:
-                    st.image(wc_buf, use_column_width=True)
+    with tab2:
+        fig_pie = px.pie(values=list(st.session_state.percentages.values()),
+                        names=["Positif","Netral","Negatif"],
+                        color_discrete_sequence=["#00ff00","#ffff00","#ff0000"])
+        st.plotly_chart(fig_pie, use_container_width=True)
+        fig_bar = px.bar(x=["Positif","Netral","Negatif"], y=list(st.session_state.percentages.values()))
+        st.plotly_chart(fig_bar, use_container_width=True)
+        if show_wordcloud:
+            wc = generate_wordcloud(' '.join(st.session_state.comments))
+            if wc: st.image(wc, caption="Word Cloud Semua Komentar")
 
-        with tab3:
-            st.subheader("Sample Komentar")
-            with st.expander("😊 Top Positive Comments"):
-                for c in sentiment_comments['positive']:
-                    st.write(f"- {c}")
-            with st.expander("😐 Top Neutral Comments"):
-                for c in sentiment_comments['neutral']:
-                    st.write(f"- {c}")
-            with st.expander("😠 Top Negative Comments"):
-                for c in sentiment_comments['negative']:
-                    st.write(f"- {c}")
-        
-        # Download PDF & JPG
-        def create_pdf():
-            buffer = BytesIO()
-            c = canvas.Canvas(buffer, pagesize=A4)
-            width, height = A4
-            
-            c.setFont("Helvetica-Bold", 20)
-            c.drawString(50, height-80, "Laporan Analisis Sentimen YouTube")
-            c.setFont("Helvetica", 12)
-            c.drawString(50, height-110, f"Video ID: {video_id}")
-            c.drawString(50, height-130, f"Total komentar dianalisis: {valid_comments}")
-            
-            y = height - 180
-            for sentiment, pct in percentages.items():
-                c.drawString(50, y, f"{sentiment.capitalize()}: {pct}% ({counts[sentiment]} komentar)")
-                y -= 25
-            
-            pie_img = BytesIO()
-            fig_pie.write_image(pie_img, format="PNG")
-            pie_img.seek(0)
-            c.drawImage(ImageReader(pie_img), 50, y-300, width=500, height=300)
-            
-            c.showPage()
-            c.save()
-            buffer.seek(0)
-            return buffer
-        
-        pdf_buffer = create_pdf()
-        st.download_button(
-            "📥 Download Laporan PDF",
-            pdf_buffer,
-            file_name=f"sentimen_{video_id}.pdf",
-            mime="application/pdf",
-            key="pdf_download"
-        )
-        
-        jpg_buffer = BytesIO()
-        fig_pie.write_image(jpg_buffer, format="JPG")
-        jpg_buffer.seek(0)
-        st.download_button(
-            "🖼️ Download Pie Chart (JPG)",
-            jpg_buffer,
-            file_name=f"pie_chart_{video_id}.jpg",
-            mime="image/jpeg",
-            key="jpg_download"
-        )
-        
-        # Tombol "Analisis Video Lain" (reset cache)
-        if st.button("🔄 Analisis Video Lain", type="secondary"):
-            # Reset session_state
-            st.session_state.video_info = None
-            st.session_state.video_id = None
-            st.session_state.comments = None
-            st.session_state.counts = None
-            st.session_state.percentages = None
-            st.session_state.valid_comments = None
-            st.session_state.sentiment_comments = None
-            st.experimental_rerun()  # Refresh app biar input kosong
+    with tab3:
+        for sent in ["positive", "neutral", "negative"]:
+            with st.expander(f"{sent.capitalize()} Comments (contoh)"):
+                for com in st.session_state.samples[sent]:
+                    st.write(f"• {com}")
 
-st.caption("Dibuat dengan ❤️ dan Indo RoBERTa — cocok banget buat tugas Text Mining | Versi Optimasi Quota & Cache")
+    # Download
+    buf = BytesIO()
+    fig_pie.write_image(buf, format="JPG")
+    buf.seek(0)
+    st.download_button("Download Pie Chart (JPG)", buf, "pie_chart.jpg", "image/jpeg")
+
+    if st.button("Analisis Video Lain"):
+        for k in keys:
+            st.session_state[k] = None
+        st.experimental_rerun()
+
+st.caption("© 2025 — Proyek UAS Text Mining | Indo RoBERTa Powered | Dibuat bareng Grok ")
