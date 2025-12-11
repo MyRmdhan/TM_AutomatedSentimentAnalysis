@@ -1,4 +1,4 @@
-# app.py — FINAL: IndoBERT PAKAI TEKS ASLI, VISUALISASI PAKAI TEKS BERSIH (STOPWORD)
+# app.py — VERSI FINAL DARK MODE + VISUALISASI LEBIH VARIATIF & INFORMATIF + SEMUA FITUR KAMU MINTA
 import streamlit as st
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -6,61 +6,60 @@ import re
 import emoji
 from transformers import pipeline
 import plotly.express as px
+from io import BytesIO
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import pandas as pd
 from datetime import datetime
 from collections import Counter
-
-# ================== STOPWORDS BAHASA INDONESIA ==================
-INDONESIAN_STOPWORDS = {
-    'yang', 'di', 'ke', 'dari', 'dan', 'dengan', 'untuk', 'pada', 'adalah', 'ini', 'itu',
-    'saya', 'kamu', 'dia', 'kami', 'kita', 'mereka', 'aku', 'gue', 'lo', 'lu', 'gw',
-    'banget', 'bgt', 'nih', 'si', 'ga', 'gak', 'nggak', 'kalo', 'kalau', 'bisa', 'bikin',
-    'aja', 'sih', 'dong', 'deh', 'ya', 'lah', 'kok', 'kan', 'lo', 'lu', 'gw', 'ku',
-    'dulu', 'baru', 'udah', 'masih', 'lagi', 'sama', 'juga', 'atau', 'karena', 'soalnya',
-    'makanya', 'biar', 'supaya', 'buat', 'mau', 'pengen', 'suka', 'lebih', 'kurang'
-}
+from sklearn.feature_extraction.text import TfidfVectorizer  # Tambah buat TF-IDF kata berpengaruh
 
 # ================== API KEY ==================
 API_KEY = st.secrets["YOUTUBE_API_KEY"]
 
-# DARK MODE CANTIK
+# FULL DARK MODE — CANTIK, MODERN, ELEGAN
 st.set_page_config(page_title="YT Sentiment Analyzer", layout="wide")
 st.markdown("""
 <style>
-    .stApp {background: linear-gradient(135deg, #0f0f23, #1a1a2e); color: #e0e0e0;}
-    .stButton>button {background: linear-gradient(45deg, #00d4ff, #090979); color: white; border-radius: 16px; font-weight: bold; border: none; padding: 12px; box-shadow: 0 4px 15px rgba(0,212,255,0.4);}
-    .stButton>button:hover {transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,212,255,0.6);}
-    .stTextInput>div>div>input {background-color: #16213e; color: white; border-radius: 12px; border: 1px solid #00d4ff;}
+    .stApp {
+        background: linear-gradient(135deg, #0f0f23, #1a1a2e);
+        color: #e0e0e0;
+    }
+    .stButton>button {
+        background: linear-gradient(45deg, #00d4ff, #090979);
+        color: white;
+        border-radius: 16px;
+        font-weight: bold;
+        border: none;
+        padding: 12px;
+        box-shadow: 0 4px 15px rgba(0,212,255,0.4);
+    }
+    .stButton>button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,212,255,0.6);
+    }
+    .stTextInput>div>div>input {
+        background-color: #16213e;
+        color: white;
+        border-radius: 12px;
+        border: 1px solid #00d4ff;
+    }
     h1, h2, h3, h4 {color: #00d4ff !important;}
+    .stMarkdown {color: #e0e0e0 !important;}
     .stExpander {background-color: #16213e; border: 1px solid #00d4ff; border-radius: 10px;}
 </style>
 """, unsafe_allow_html=True)
 
+# Load model
 @st.cache_resource
-def load_model():
+def load_sentiment_model():
     return pipeline("sentiment-analysis",
                     model="w11wo/indonesian-roberta-base-sentiment-classifier",
                     truncation=True, max_length=512)
 
-nlp = load_model()
+nlp = load_sentiment_model()
 
-# ================== FUNGSI PREPROCESSING ==================
-def clean_for_model(text):  # Hanya bersih ringan — dipakai IndoBERT
-    text = emoji.replace_emoji(text, "")
-    text = re.sub(r'http[s]?://\S+', '', text)
-    text = re.sub(r'[\n\r]+', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip().lower()
-    return text
-
-def clean_for_visualization(text):  # Bersih + hapus stopword — hanya untuk visualisasi
-    text = clean_for_model(text)
-    words = text.split()
-    words = [w for w in words if w not in INDONESIAN_STOPWORDS and len(w) > 2]
-    return ' '.join(words)
-
-# ================== FUNGSI LAINNYA ==================
+# ================== FUNGSI ==================
 def extract_video_id(url):
     match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
     return match.group(1) if match else None
@@ -71,14 +70,9 @@ def fetch_video_info(video_id):
         res = youtube.videos().list(part="snippet", id=video_id).execute()
         if res['items']:
             item = res['items'][0]['snippet']
-            thumb = item['thumbnails']
-            url = (thumb.get('maxres', {}).get('url') or
-                   thumb.get('high', {}).get('url') or
-                   thumb.get('medium', {}).get('url') or
-                   thumb.get('default', {}).get('url') or
-                   f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg")
-            return {'title': item['title'], 'thumbnail_url': url}
-    except: pass
+            return {'title': item['title'], 'thumbnail_url': item['thumbnails']['high']['url']}
+    except HttpError:
+        st.error("Quota habis atau error API.")
     return None
 
 def fetch_comments(video_id, max_comments):
@@ -91,54 +85,88 @@ def fetch_comments(video_id, max_comments):
 
     while fetched < max_comments:
         try:
-            res = youtube.commentThreads().list(part="snippet", videoId=video_id, maxResults=100, pageToken=next_page).execute()
+            res = youtube.commentThreads().list(
+                part="snippet", videoId=video_id, maxResults=100, pageToken=next_page
+            ).execute()
             for item in res['items']:
-                s = item['snippet']['topLevelComment']['snippet']
-                comments.append(s['textDisplay'])
-                timestamps.append(s['publishedAt'])
+                snippet = item['snippet']['topLevelComment']['snippet']
+                comments.append(snippet['textDisplay'])
+                timestamps.append(snippet['publishedAt'])
                 fetched += 1
-                if fetched % 50 == 0: status.info(f"Mengambil: {fetched}/{max_comments}")
+                if fetched % 50 == 0:
+                    status.info(f"Mengambil: {fetched}/{max_comments}")
                 if fetched >= max_comments: break
             next_page = res.get('nextPageToken')
             if not next_page: break
-        except HttpError: st.error("Quota habis!"); return [], []
+        except HttpError:
+            st.error("Quota habis!")
+            return [], []
     status.success(f"Berhasil ambil {len(comments)} komentar!")
     return comments, timestamps
 
-def analyze_sentiment(comments, timestamps):
-    # Gunakan teks asli untuk model
-    model_texts = [clean_for_model(c) for c in comments]
-    model_texts = [t for t in model_texts if len(t) > 10]
-    valid_indices = [i for i, t in enumerate([clean_for_model(c) for c in comments]) if len(t) > 10]
-    valid_timestamps = [timestamps[i] for i in valid_indices]
+def clean_comment(text):
+    text = emoji.replace_emoji(text, "")
+    text = re.sub(r'http[s]?://\S+', '', text)
+    text = re.sub(r'[\n\r]+', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip().lower()
+    return text
 
-    if not model_texts: return {}, {}, 0, {}, {}, [], []
+def analyze_sentiment(comments, timestamps):
+    cleaned = []
+    valid_timestamps = []
+    for c, ts in zip(comments, timestamps):
+        cleaned_text = clean_comment(c)
+        if len(cleaned_text) > 10:
+            cleaned.append(cleaned_text)
+            valid_timestamps.append(ts)
+
+    if not cleaned:
+        return {}, {}, 0, {}, {}, [], []
 
     sentiments = {"positive": 0, "negative": 0, "neutral": 0}
     samples = {"positive": [], "negative": [], "neutral": []}
-    clean_texts = {"positive": [], "negative": [], "neutral": []}  # Untuk visualisasi (sudah bersih stopword)
+    texts = {"positive": [], "negative": [], "neutral": []}
     data = []
+    scores = {"positive": [], "negative": [], "neutral": []}  # Tambah buat distribution scores
 
     status = st.empty()
     status.info("Menganalisis sentimen...")
-    for i in range(0, len(model_texts), 64):
-        batch = model_texts[i:i+64]
+    total = len(cleaned)
+    batch_size = 64
+
+    for i in range(0, total, batch_size):
+        batch = cleaned[i:i+batch_size]
+        batch_ts = valid_timestamps[i:i+batch_size]
         results = nlp(batch)
-        for r, raw_text, ts in zip(results, [comments[valid_indices[j]] for j in range(i, min(i+64, len(valid_indices)))], valid_timestamps[i:i+64]):
+        for r, com, ts in zip(results, batch, batch_ts):
             label = r['label'].lower()
             sentiments[label] += 1
-            clean_vis = clean_for_visualization(raw_text)
-            clean_texts[label].append(clean_vis)
-            if len(samples[label]) < 5: samples[label].append(raw_text[:200] + "...")
+            texts[label].append(com)
+            scores[label].append(r['score'])  # Tambah score buat box plot
+            if len(samples[label]) < 5:
+                samples[label].append(com)
             data.append({'date': datetime.fromisoformat(ts.replace('Z','+00:00')), 'sentimen': label})
+        if (i // batch_size) % 3 == 0:
+            status.info(f"Proses: {min(i + batch_size, total)}/{total}")
 
-    percentages = {k: round(v/len(model_texts)*100, 2) for k, v in sentiments.items()}
+    percentages = {k: round(v/total*100, 2) for k, v in sentiments.items()}
     status.success("Analisis selesai!")
-    return sentiments, percentages, len(model_texts), samples, clean_texts, data
+
+    # Tambah TF-IDF buat kata berpengaruh
+    tfidf = TfidfVectorizer(max_features=20)
+    tfidf_docs = [ ' '.join(texts[sent]) for sent in ['positive', 'negative', 'neutral'] ]
+    tfidf.fit(tfidf_docs)
+    tfidf_words = {}
+    for i, sent in enumerate(['positive', 'negative', 'neutral']):
+        feature_names = tfidf.get_feature_names_out()
+        scores_vec = tfidf.transform([tfidf_docs[i]]).toarray()[0]
+        tfidf_words[sent] = sorted([(feature_names[j], scores_vec[j]) for j in range(len(scores_vec))], key=lambda x: x[1], reverse=True)
+
+    return sentiments, percentages, total, samples, texts, data, scores, tfidf_words
 
 def generate_wordcloud(text):
     if not text: return None
-    wc = WordCloud(width=800, height=400, background_color='#0f0f23', colormap='viridis', max_words=100).generate(text)
+    wc = WordCloud(width=800, height=400, background_color='#0f0f23', colormap='viridis').generate(text)
     fig, ax = plt.subplots(figsize=(10,5), facecolor='#0f0f23')
     ax.imshow(wc, interpolation='bilinear')
     ax.axis('off')
@@ -148,12 +176,13 @@ def generate_wordcloud(text):
     return buf
 
 # ================== SESSION STATE ==================
-for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','clean_texts','sentiment_data']:
-    if k not in st.session_state: st.session_state[k] = None
+for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words']:
+    if k not in st.session_state:
+        st.session_state[k] = None
 
 # ================== UI ==================
 st.title("YouTube Sentiment Analyzer")
-st.markdown("**Dark Mode • IndoBERT Pakai Teks Asli • Visualisasi Pakai Teks Bersih (Tanpa Stopword)**")
+st.markdown("**Dark Mode • Indo RoBERTa • Insight Lebih Variatif & Detail • Siap Presentasi UAS**")
 
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/youtube-play.png")
@@ -163,6 +192,7 @@ with st.sidebar:
     with col2: manual = st.number_input("Ketik", 100, 5000, slider, 100, label_visibility="collapsed")
     max_comments = manual
     if max_comments > 2000: st.warning("Banyak komentar = lama proses!")
+    show_wc = st.checkbox("Word Cloud", True)
 
 url = st.text_input("Link YouTube", placeholder="https://www.youtube.com/watch?v=...")
 
@@ -174,24 +204,24 @@ if st.button("Cari Video", type="secondary") and url:
             st.session_state.video_info = info
             st.session_state.video_id = vid
             st.success(f"**{info['title']}**")
-            st.image(info['thumbnail_url'], width=600)
+            st.image(info['thumbnail_url'], width=500)
         else: st.error("Video tidak ditemukan.")
     else: st.error("Link tidak valid!")
 
 if st.session_state.video_info and not st.session_state.comments:
     if st.button("Mulai Analisis Sentimen", type="primary"):
-        with st.spinner("Sedang mengambil & menganalisis..."):
+        with st.spinner("Proses penuh sedang berjalan..."):
             comments, timestamps = fetch_comments(st.session_state.video_id, max_comments)
             if comments:
-                c, p, v, s, clean_texts, data = analyze_sentiment(comments, timestamps)
+                c, p, v, s, texts, data, scores, tfidf_words = analyze_sentiment(comments, timestamps)
                 st.session_state.update({
                     'comments': comments, 'timestamps': timestamps, 'counts': c, 'percentages': p,
-                    'valid_comments': v, 'samples': s, 'clean_texts': clean_texts, 'sentiment_data': data
+                    'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words
                 })
                 st.success("Selesai!"); st.rerun()
 
 if st.session_state.comments:
-    tab1, tab2, tab3 = st.tabs(["Overview", "Charts", "Insight Kata"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Charts Dasar", "Insight Detail", "Sample Komentar"])
 
     with tab1:
         col1, col2, col3 = st.columns(3)
@@ -208,26 +238,56 @@ if st.session_state.comments:
         st.plotly_chart(fig, use_container_width=True)
 
     with tab3:
-        st.subheader("Word Cloud (Teks Bersih — Tanpa Stopword)")
-        cols = st.columns(3)
-        for i, sent in enumerate(["positive", "negative", "neutral"]):
-            text = ' '.join(st.session_state.clean_texts[sent])
-            wc = generate_wordcloud(text)
-            if wc: cols[i].image(wc, caption=sent.capitalize())
+        if show_wc:
+            st.subheader("Word Cloud Per Sentimen")
+            cols = st.columns(3)
+            for i, sent in enumerate(["positive", "negative", "neutral"]):
+                wc = generate_wordcloud(' '.join(st.session_state.sentiment_texts[sent]))
+                if wc: cols[i].image(wc, caption=sent.capitalize())
 
-        st.subheader("Top 10 Kata Paling Sering (Setelah Stopword Dihapus)")
+        st.subheader("Top Kata Paling Banyak Per Sentimen")
         cols = st.columns(3)
         for i, sent in enumerate(["positive", "negative", "neutral"]):
-            words = ' '.join(st.session_state.clean_texts[sent]).split()
-            top = Counter(words).most_common(10)
+            top = Counter(' '.join(st.session_state.sentiment_texts[sent]).split()).most_common(10)
             if top:
                 df = pd.DataFrame(top, columns=['Kata', 'Frekuensi'])
-                fig = px.bar(df, x='Frekuensi', y='Kata', orientation='h', template="plotly_dark", title=sent.capitalize())
-                cols[i].plotly_chart(fig, use_container_width=True)
+                fig_top = px.bar(df, x='Frekuensi', y='Kata', orientation='h', template="plotly_dark", title=sent.capitalize())
+                cols[i].plotly_chart(fig_top, use_container_width=True)
+
+        st.subheader("Kata Berpengaruh (TF-IDF) Per Sentimen")
+        cols = st.columns(3)
+        for i, sent in enumerate(["positive", "negative", "neutral"]):
+            top_tfidf = st.session_state.tfidf_words[sent]
+            if top_tfidf:
+                df_tfidf = pd.DataFrame(top_tfidf, columns=['Kata', 'Score'])
+                fig_tfidf = px.bar(df_tfidf, x='Score', y='Kata', orientation='h', template="plotly_dark", title=sent.capitalize())
+                cols[i].plotly_chart(fig_tfidf, use_container_width=True)
+
+        st.subheader("Distribusi Confidence Score Per Sentimen")
+        score_df = pd.DataFrame()
+        for sent in ["positive", "negative", "neutral"]:
+            if st.session_state.scores[sent]:
+                temp_df = pd.DataFrame({'Sentimen': sent, 'Score': st.session_state.scores[sent]})
+                score_df = pd.concat([score_df, temp_df])
+        fig_box = px.box(score_df, x='Sentimen', y='Score', template="plotly_dark", title="Distribusi Score")
+        st.plotly_chart(fig_box, use_container_width=True)
+
+        st.subheader("Tren Sentimen Over Time")
+        if st.session_state.sentiment_data:
+            df = pd.DataFrame(st.session_state.sentiment_data)
+            df['date'] = pd.to_datetime(df['date']).dt.floor('H')
+            dfg = df.groupby([pd.Grouper(key='date', freq='6H'), 'sentimen']).size().unstack(fill_value=0)
+            fig = px.line(dfg, template="plotly_dark", title="Tren per 6 Jam")
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab4:
+        for sent in ["positive", "neutral", "negative"]:
+            with st.expander(f"{sent.capitalize()} (contoh)"):
+                for c in st.session_state.samples[sent]:
+                    st.write(f"• {c}")
 
     if st.button("Analisis Video Lain"):
-        for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','clean_texts','sentiment_data']:
-            st.session_state[k] = None
+        for k in keys: st.session_state[k] = None
         st.rerun()
 
-st.caption("© 2025 — Dark Mode • IndoBERT Akurat • Visualisasi Bersih • Dibuat bareng Grok")
+st.caption("© 2025 — Dark Mode Edition | Indo RoBERTa | Dibuat bareng Grok")
