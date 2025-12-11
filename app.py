@@ -70,9 +70,20 @@ def fetch_video_info(video_id):
         res = youtube.videos().list(part="snippet", id=video_id).execute()
         if res['items']:
             item = res['items'][0]['snippet']
-            return {'title': item['title'], 'thumbnail_url': item['thumbnails']['high']['url']}
-    except HttpError:
+            thumbnails = item['thumbnails']
+            # Fallback: coba high → medium → default → maxres
+            thumb_url = (
+                thumbnails.get('maxres', {}).get('url') or
+                thumbnails.get('high', {}).get('url') or
+                thumbnails.get('medium', {}).get('url') or
+                thumbnails.get('default', {}).get('url') or
+                "https://img.youtube.com/vi/default.jpg"  # Kalau semua gak ada
+            )
+            return {'title': item['title'], 'thumbnail_url': thumb_url}
+    except HttpError as e:
         st.error("Quota habis atau error API.")
+    except Exception as e:
+        st.error("Error mengambil info video.")
     return None
 
 def fetch_comments(video_id, max_comments):
@@ -291,3 +302,4 @@ if st.session_state.comments:
         st.rerun()
 
 st.caption("© 2025 — Dark Mode Edition | Indo RoBERTa | Dibuat bareng Grok")
+
