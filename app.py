@@ -240,10 +240,29 @@ def fetch_comments(video_id, max_comments):
     return comments, timestamps
 
 def clean_comment(text):
+    # Hapus HTML tags dan entities
+    text = re.sub(r'<[^>]+>', '', text)  # Hapus HTML tags
+    text = re.sub(r'&nbsp;|&lt;|&gt;|&amp;|&quot;|&#39;|&.*?;', '', text)  # Hapus HTML entities
+    
+    # Hapus emoji
     text = emoji.replace_emoji(text, "")
+    
+    # Hapus URL
     text = re.sub(r'http[s]?://\S+', '', text)
-    text = re.sub(r'[\n\r]+', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip().lower()
+    text = re.sub(r'www\.\S+', '', text)
+    
+    # Hapus newline dan carriage return
+    text = re.sub(r'[\n\r\t]+', ' ', text)
+    
+    # Hapus multiple spaces
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Strip whitespace di awal dan akhir, lowercase
+    text = text.strip().lower()
+    
+    # Hapus special characters tapi jaga huruf, angka, dan spasi
+    text = re.sub(r'[^a-z0-9\s]', '', text)
+    
     return text
 
 def clean_for_visualization(text):
