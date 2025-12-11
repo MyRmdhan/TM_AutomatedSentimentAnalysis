@@ -27,10 +27,35 @@ if not API_KEY:
 # Custom CSS — bikin cantik banget
 st.markdown("""
 <style>
-    .stApp {background: linear-gradient(to right, #f0f2f6, #ffffff);}
-    .stButton>button {background-color: #4CAF50; color: white; border-radius: 20px; font-weight: bold; height: 3em; width: 100%;}
-    .stTextInput>div>div>input {border-radius: 12px; padding: 10px;}
-    h1 {text-align: center; color: #2E86C1;}
+   .stApp {
+        background: linear-gradient(135deg, #0f0f23, #1a1a2e);
+        color: #e0e0e0;
+    }
+    .stButton>button {
+        background: linear-gradient(45deg, #00d4ff, #090979);
+        color: white;
+        border-radius: 16px;
+        font-weight: bold;
+        border: none;
+        padding: 12px;
+        box-shadow: 0 4px 15px rgba(0,212,255,0.4);
+        transition: all 0.3s;
+    }
+    .stButton>button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,212,255,0.6);
+    }
+    .stTextInput>div>div>input {
+        background-color: #16213e;
+        color: white;
+        border-radius: 12px;
+        border: 1px solid #00d4ff;
+    }
+    .stMarkdown, .stText {
+        color: #e0e0e0 !important;
+    }
+    h1, h2, h3 {color: #00d4ff !important;}
+    .css-1d391kg {background: transparent !important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -270,3 +295,4 @@ if st.session_state.comments:
         st.experimental_rerun()
 
 st.caption("© 2025 — Proyek UAS Text Mining | Indo RoBERTa Powered | Dibuat bareng Grok ")
+
