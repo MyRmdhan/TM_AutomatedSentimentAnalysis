@@ -194,7 +194,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     col_img = st.columns([1])[0]
-    col_img.image("https://img.icons8.com/color/96/youtube-play.png", width=96)
+    col_img.image("https://img.icons8.com/color/96/youtube-play.png")
     
     st.markdown("---")
     st.markdown("### ⚙️ Pengaturan Analisis")
@@ -329,4 +329,5 @@ if st.session_state.comments:
         st.rerun()
 
 st.caption("© 2025 — Dark Mode Edition | Indo RoBERTa | Dibuat bareng Grok")
+
 
