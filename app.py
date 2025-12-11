@@ -185,40 +185,76 @@ st.title("YouTube Sentiment Analyzer")
 st.markdown("**Dark Mode • Indo RoBERTa • Insight Lebih Variatif & Detail • Siap Presentasi UAS**")
 
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/youtube-play.png")
-    st.header("Pengaturan")
+    st.markdown("""
+    <style>
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0f0f23, #16213e);
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    col_img = st.columns([1])[0]
+    col_img.image("https://img.icons8.com/color/96/youtube-play.png", use_container_width=True)
+    
+    st.markdown("---")
+    st.markdown("### ⚙️ Pengaturan Analisis")
+    st.markdown("Atur parameter untuk menganalisis komentar video YouTube Anda")
+    
+    st.markdown("#### 📊 Jumlah Komentar")
+    st.markdown("Pilih jumlah komentar yang ingin dianalisis (100 - 5000)")
     col1, col2 = st.columns(2)
-    with col1: slider = st.slider("Slider", 100, 5000, 500, 100, label_visibility="collapsed")
-    with col2: manual = st.number_input("Ketik", 100, 5000, slider, 100, label_visibility="collapsed")
+    with col1: 
+        slider = st.slider("Slider", 100, 5000, 500, 100, label_visibility="collapsed")
+    with col2: 
+        manual = st.number_input("Manual", 100, 5000, slider, 100, label_visibility="collapsed")
     max_comments = manual
-    if max_comments > 2000: st.warning("Banyak komentar = lama proses!")
-    show_wc = st.checkbox("Word Cloud", True)
+    
+    if max_comments > 2000: 
+        st.warning("⏱️ Jumlah komentar banyak, proses akan memakan waktu lebih lama")
+    elif max_comments > 1000:
+        st.info("✓ Jumlah komentar optimal untuk analisis")
+    
+    st.markdown("---")
+    st.markdown("#### 🎨 Visualisasi")
+    show_wc = st.checkbox("☁️ Tampilkan Word Cloud", value=True)
+    
+    st.markdown("---")
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #00d4ff, #090979); padding: 15px; border-radius: 10px; text-align: center; margin-top: 20px;'>
+        <p style='color: white; margin: 0; font-size: 12px;'><strong>💡 Tips:</strong> Gunakan 500-1000 komentar untuk hasil optimal dan proses cepat</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("<p style='text-align: center; color: #888; font-size: 11px;'>v1.0 • Dark Mode • Indo RoBERTa</p>", unsafe_allow_html=True)
 
 url = st.text_input("Link YouTube", placeholder="https://www.youtube.com/watch?v=...")
 
-if st.button("Cari Video", type="secondary") and url:
-    vid = extract_video_id(url)
-    if vid:
-        info = fetch_video_info(vid)
-        if info:
-            st.session_state.video_info = info
-            st.session_state.video_id = vid
-            st.success(f"**{info['title']}**")
-            st.image(info['thumbnail_url'], width=500)
-        else: st.error("Video tidak ditemukan.")
-    else: st.error("Link tidak valid!")
+if not st.session_state.comments:
+    if st.button("Cari Video", type="secondary") and url:
+        vid = extract_video_id(url)
+        if vid:
+            info = fetch_video_info(vid)
+            if info:
+                st.session_state.video_info = info
+                st.session_state.video_id = vid
+                st.success(f"**{info['title']}**")
+                st.image(info['thumbnail_url'], width=500)
+            else: st.error("Video tidak ditemukan.")
+        else: st.error("Link tidak valid!")
 
-if st.session_state.video_info and not st.session_state.comments:
-    if st.button("Mulai Analisis Sentimen", type="primary"):
-        with st.spinner("Proses penuh sedang berjalan..."):
-            comments, timestamps = fetch_comments(st.session_state.video_id, max_comments)
-            if comments:
-                c, p, v, s, texts, data, scores, tfidf_words = analyze_sentiment(comments, timestamps)
-                st.session_state.update({
-                    'comments': comments, 'timestamps': timestamps, 'counts': c, 'percentages': p,
-                    'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words
-                })
-                st.success("Selesai!"); st.rerun()
+    if st.session_state.video_info and not st.session_state.comments:
+        if st.button("Mulai Analisis Sentimen", type="primary"):
+            with st.spinner("Proses penuh sedang berjalan..."):
+                comments, timestamps = fetch_comments(st.session_state.video_id, max_comments)
+                if comments:
+                    result = analyze_sentiment(comments, timestamps)
+                    c, p, v, s, texts, data, scores, tfidf_words = result
+                    st.session_state.update({
+                        'comments': comments, 'timestamps': timestamps, 'counts': c, 'percentages': p,
+                        'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words
+                    })
+                    st.success("Selesai!"); st.rerun()
 
 if st.session_state.comments:
     tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Charts Dasar", "Insight Detail", "Sample Komentar"])
@@ -286,7 +322,9 @@ if st.session_state.comments:
                 for c in st.session_state.samples[sent]:
                     st.write(f"• {c}")
 
-    if st.button("Analisis Video Lain"):
+    st.divider()
+    if st.button("Analisis Video Lain", type="primary"):
+        keys = ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words']
         for k in keys: st.session_state[k] = None
         st.rerun()
 
