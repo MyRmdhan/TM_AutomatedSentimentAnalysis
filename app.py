@@ -89,7 +89,7 @@ def load_sentiment_pipeline():
     model_name = "ayameRushia/bert-base-indonesian-1.5G-sentiment-analysis-smsa"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSequenceClassification.from_pretrained(model_name)
-    sentiment_classifier = pipeline("sentiment-analysis", model=model, tokenizer=tokenizer)
+    sentiment_classifier = pipeline("sentiment-analysis", model=model, tokenizer=tokenizer, truncation=True)
     return sentiment_classifier
 
 def clean_text_for_wordcloud(text):
