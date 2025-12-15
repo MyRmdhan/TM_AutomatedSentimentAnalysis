@@ -86,7 +86,7 @@ def get_youtube_comments(video_id, api_key, max_results=100):
 # Function to load and use IndoBERT sentiment pipeline
 @st.cache_resource(show_spinner=True)
 def load_sentiment_pipeline():
-    model_name = "mdhugol/indonesia-sentimen-text-classification"
+    model_name = "ayameRushia/bert-base-indonesian-1.5G-sentiment-analysis-smsa"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSequenceClassification.from_pretrained(model_name)
     sentiment_classifier = pipeline("sentiment-analysis", model=model, tokenizer=tokenizer)
