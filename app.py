@@ -466,15 +466,7 @@ if not st.session_state.comments:
             st.markdown("---")
             st.session_state['show_wc'] = st.checkbox("☁️ Tampilkan Word Cloud", value=st.session_state.get('show_wc', True))
 
-            # Tips in an expander for cleaner layout
-            with st.expander("💡 Tips Penggunaan", expanded=False):
-                st.markdown("""
-                <ul style='color: #cccccc; font-size: 12px; padding-left: 18px; margin: 6px 0;'>
-                    <li>Gunakan 500-1000 komentar untuk hasil optimal</li>
-                    <li>Model IndoBERT membutuhkan konteks kalimat penuh</li>
-                    <li>Proses visualisasi dilakukan setelah analisis</li>
-                </ul>
-                """, unsafe_allow_html=True)
+          
 
             # Action button aligned full-width
             if st.button("▶️ Mulai Analisis Sentimen", type="primary", use_container_width=True) and not st.session_state.get('is_running'):
