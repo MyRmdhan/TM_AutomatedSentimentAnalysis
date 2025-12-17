@@ -421,29 +421,30 @@ if not st.session_state.comments:
                     <p style='color: #cccccc; font-size: 13px; margin: 0;'>Atur parameter analisis</p>
                 </div>
                 """, unsafe_allow_html=True)
+            # Initialize widget-backed session_state keys (avoid setting during render)
+            if 'slider_max_comments' not in st.session_state:
+                st.session_state['slider_max_comments'] = st.session_state.get('max_comments', 500)
+            if 'manual_max_comments' not in st.session_state:
+                st.session_state['manual_max_comments'] = st.session_state.get('max_comments', 500)
+
             # Keep slider and manual input synchronized via session_state callbacks
             def _sync_slider():
-                # when slider changes, update manual and max_comments
-                st.session_state['max_comments'] = st.session_state.get('slider_max_comments', st.session_state.get('max_comments', 500))
+                # when slider changes, update manual and canonical max_comments
+                val = st.session_state.get('slider_max_comments')
+                st.session_state['max_comments'] = val
+                st.session_state['manual_max_comments'] = val
 
             def _sync_manual():
-                # when manual input changes, update slider and max_comments
-                st.session_state['max_comments'] = st.session_state.get('manual_max_comments', st.session_state.get('max_comments', 500))
+                # when manual input changes, update slider and canonical max_comments
+                val = st.session_state.get('manual_max_comments')
+                st.session_state['max_comments'] = val
+                st.session_state['slider_max_comments'] = val
 
             c1, c2 = st.columns(2)
             with c1:
                 slider = st.slider("Jumlah Komentar (100-5000)", 100, 5000, key='slider_max_comments', step=100, on_change=_sync_slider)
             with c2:
                 manual = st.number_input("Manual", 100, 5000, key='manual_max_comments', step=100, on_change=_sync_manual)
-
-            # Ensure both widgets reflect the stored value after interactions
-            current = st.session_state.get('max_comments', 500)
-            if st.session_state.get('slider_max_comments', None) != current:
-                st.session_state['slider_max_comments'] = current
-            if st.session_state.get('manual_max_comments', None) != current:
-                st.session_state['manual_max_comments'] = current
-            # Keep canonical value in max_comments
-            st.session_state['max_comments'] = st.session_state['slider_max_comments']
 
             if st.session_state['max_comments'] > 2000:
                 st.markdown("""
