@@ -1,4 +1,3 @@
-# app.py — VERSI FINAL DARK MODE + VISUALISASI LEBIH VARIATIF & INFORMATIF + SEMUA FITUR KAMU MINTA
 import streamlit as st
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -364,99 +363,21 @@ with col_header1:
     """, unsafe_allow_html=True)
 
 with col_header2:
+    # Simple, unobtrusive header right area for version only
     st.markdown("""
     <div style='text-align: right; padding: 20px 0;'>
-        <p style='color: #666666; font-size: 12px;'>
-            <strong>Model:</strong> Indo RoBERTa<br>
-            <strong>Dark Mode:</strong> Modern Edition v1.0
-        </p>
+        <p style='color: #666666; font-size: 12px; margin:0;'>v1.0</p>
     </div>
     """, unsafe_allow_html=True)
 
 st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 20px 0;'>", unsafe_allow_html=True)
 
-with st.sidebar:
-    st.markdown("""
-    <style>
-        [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0a0a0a, #151515);
-        }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Logo Section
-    col_img = st.columns([1])[0]
-    col_img.image("https://img.icons8.com/color/96/youtube-play.png", width=75)
-    
-    st.markdown("""
-    <div style='text-align: center; margin-bottom: 20px;'>
-        <p style='color: #888888; font-size: 12px; margin: 8px 0 0 0;'><strong>YouTube Sentiment Analysis</strong></p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Settings Section
-    st.markdown("""
-    <div style='margin-bottom: 15px;'>
-        <p style='color: #ffffff; font-size: 15px; font-weight: 600; margin: 0 0 5px 0;'>⚙️ Pengaturan Analisis</p>
-        <p style='color: #888888; font-size: 12px; margin: 0;'>Atur parameter untuk menganalisis komentar</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Comment Count Section
-    st.markdown("""
-    <div style='margin-bottom: 15px;'>
-        <p style='color: #cccccc; font-size: 13px; font-weight: 600; margin: 0 0 10px 0;'>📊 Jumlah Komentar</p>
-        <p style='color: #999999; font-size: 11px; margin: 0;'>Pilih jumlah yang ingin dianalisis (100 - 5000)</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    with col1: 
-        slider = st.slider("Slider", 100, 5000, 500, 100, label_visibility="collapsed")
-    with col2: 
-        manual = st.number_input("Manual", 100, 5000, slider, 100, label_visibility="collapsed")
-    max_comments = manual
-    
-    # Status Messages
-    if max_comments > 2000: 
-        st.markdown("""
-        <div style='background: rgba(255,150,0,0.15); border-left: 3px solid #ff9600; padding: 10px; border-radius: 6px; margin: 10px 0;'>
-            <p style='color: #ffb366; font-size: 12px; margin: 0;'><strong>⏱️ Catatan:</strong> Banyak komentar = proses lebih lama</p>
-        </div>
-        """, unsafe_allow_html=True)
-    elif max_comments >= 1000:
-        st.markdown("""
-        <div style='background: rgba(0,200,100,0.15); border-left: 3px solid #00c864; padding: 10px; border-radius: 6px; margin: 10px 0;'>
-            <p style='color: #66ff99; font-size: 12px; margin: 0;'><strong>✓ Optimal:</strong> Parameter sudah ideal untuk analisis cepat</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Visualization Section
-    st.markdown("""
-    <p style='color: #cccccc; font-size: 13px; font-weight: 600; margin: 15px 0 10px 0;'>🎨 Visualisasi</p>
-    """, unsafe_allow_html=True)
-    show_wc = st.checkbox("☁️ Tampilkan Word Cloud", value=True)
-    
-    st.markdown("---")
-    
-    # Tips Box
-    st.markdown("""
-    <div style='background: linear-gradient(135deg, #2a2a2a, #333333); padding: 15px; border-radius: 10px; border: 1px solid #444444; margin: 20px 0;'>
-        <p style='color: #ffffff; font-size: 12px; font-weight: 600; margin: 0 0 8px 0;'>💡 Tips Penggunaan</p>
-        <ul style='color: #cccccc; font-size: 11px; margin: 0; padding-left: 20px;'>
-            <li>Gunakan 500-1000 komentar untuk hasil optimal</li>
-            <li>Model IndoBERT membutuhkan konteks kalimat penuh</li>
-            <li>Proses visualisasi dilakukan setelah analisis</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    st.markdown("<p style='text-align: center; color: #666666; font-size: 10px; margin-top: 20px;'>v1.0 • Dark Mode Modern • Indo RoBERTa</p>", unsafe_allow_html=True)
+# Sidebar removed — move configuration controls into the main page after the video is found
+
+if 'show_wc' not in st.session_state:
+    st.session_state['show_wc'] = True
+if 'max_comments' not in st.session_state:
+    st.session_state['max_comments'] = 500
 
 url = st.text_input("Link YouTube", placeholder="https://www.youtube.com/watch?v=...", help="Masukkan URL video YouTube yang ingin dianalisis")
 
@@ -493,9 +414,67 @@ if not st.session_state.comments:
 
     if st.session_state.video_info and not st.session_state.comments:
         with col_btn2:
+            # Configuration in an Expander for neatness
+            with st.expander("⚙️ Pengaturan Analisis", expanded=True):
+                st.markdown("""
+                <div style='margin-top: 6px; margin-bottom: 6px;'>
+                    <p style='color: #cccccc; font-size: 13px; margin: 0;'>Atur parameter analisis</p>
+                </div>
+                """, unsafe_allow_html=True)
+            # Keep slider and manual input synchronized via session_state callbacks
+            def _sync_slider():
+                # when slider changes, update manual and max_comments
+                st.session_state['max_comments'] = st.session_state.get('slider_max_comments', st.session_state.get('max_comments', 500))
+
+            def _sync_manual():
+                # when manual input changes, update slider and max_comments
+                st.session_state['max_comments'] = st.session_state.get('manual_max_comments', st.session_state.get('max_comments', 500))
+
+            c1, c2 = st.columns(2)
+            with c1:
+                slider = st.slider("Jumlah Komentar (100-5000)", 100, 5000, key='slider_max_comments', step=100, on_change=_sync_slider)
+            with c2:
+                manual = st.number_input("Manual", 100, 5000, key='manual_max_comments', step=100, on_change=_sync_manual)
+
+            # Ensure both widgets reflect the stored value after interactions
+            current = st.session_state.get('max_comments', 500)
+            if st.session_state.get('slider_max_comments', None) != current:
+                st.session_state['slider_max_comments'] = current
+            if st.session_state.get('manual_max_comments', None) != current:
+                st.session_state['manual_max_comments'] = current
+            # Keep canonical value in max_comments
+            st.session_state['max_comments'] = st.session_state['slider_max_comments']
+
+            if st.session_state['max_comments'] > 2000:
+                st.markdown("""
+                <div style='background: rgba(255,150,0,0.15); border-left: 3px solid #ff9600; padding: 10px; border-radius: 6px; margin: 10px 0;'>
+                    <p style='color: #ffb366; font-size: 12px; margin: 0;'><strong>⏱️ Catatan:</strong> Banyak komentar = proses lebih lama</p>
+                </div>
+                """, unsafe_allow_html=True)
+            elif st.session_state['max_comments'] >= 1000:
+                st.markdown("""
+                <div style='background: rgba(0,200,100,0.15); border-left: 3px solid #00c864; padding: 10px; border-radius: 6px; margin: 10px 0;'>
+                    <p style='color: #66ff99; font-size: 12px; margin: 0;'><strong>✓ Optimal:</strong> Parameter sudah ideal untuk analisis cepat</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("---")
+            st.session_state['show_wc'] = st.checkbox("☁️ Tampilkan Word Cloud", value=st.session_state.get('show_wc', True))
+
+            # Tips in an expander for cleaner layout
+            with st.expander("💡 Tips Penggunaan", expanded=False):
+                st.markdown("""
+                <ul style='color: #cccccc; font-size: 12px; padding-left: 18px; margin: 6px 0;'>
+                    <li>Gunakan 500-1000 komentar untuk hasil optimal</li>
+                    <li>Model IndoBERT membutuhkan konteks kalimat penuh</li>
+                    <li>Proses visualisasi dilakukan setelah analisis</li>
+                </ul>
+                """, unsafe_allow_html=True)
+
+            # Action button aligned full-width
             if st.button("▶️ Mulai Analisis Sentimen", type="primary", use_container_width=True):
                 with st.spinner("🔄 Menganalisis komentar..."):
-                    comments, timestamps = fetch_comments(st.session_state.video_id, max_comments)
+                    comments, timestamps = fetch_comments(st.session_state.video_id, st.session_state['max_comments'])
                     if comments:
                         result = analyze_sentiment(comments, timestamps)
                         c, p, v, s, texts, data, scores, tfidf_words, texts_original = result
@@ -560,13 +539,13 @@ if st.session_state.comments:
         st.plotly_chart(fig, use_container_width=True)
 
     with tab3:
-        if show_wc:
+        if st.session_state.get('show_wc', True):
             st.markdown("<h3 style='margin-top: 0;'>☁️ Word Cloud Per Sentimen</h3>", unsafe_allow_html=True)
             st.markdown("<p style='color: #999999; font-size: 12px; margin-top: -15px;'>Visualisasi kata-kata yang paling sering muncul (sudah dibersihkan dari stopwords)</p>", unsafe_allow_html=True)
             cols = st.columns(3, gap="medium")
             for i, sent in enumerate(["positive", "negative", "neutral"]):
                 wc = generate_wordcloud(' '.join(st.session_state.sentiment_texts[sent]))
-                if wc: 
+                if wc:
                     with cols[i]:
                         st.image(wc, caption=f"Sentimen: {sent.upper()}", use_container_width=True)
             st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 30px 0;'>", unsafe_allow_html=True)
