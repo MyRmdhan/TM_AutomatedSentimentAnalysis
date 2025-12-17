@@ -545,9 +545,26 @@ if st.session_state.comments:
 
     with tab2:
         st.markdown("<p style='color: #999999; font-size: 13px; margin-bottom: 20px;'>Pie chart distribusi sentimen dari seluruh komentar yang dianalisis</p>", unsafe_allow_html=True)
-        fig = px.pie(values=list(st.session_state.percentages.values()),
-                     names=["Positif","Netral","Negatif"],
-                     color_discrete_sequence=["#00ff88","#ffff88","#C62828"],
+        
+        # Persiapan data untuk pie chart
+        pie_data = {
+            "Sentimen": ["Positif", "Netral", "Negatif"],
+            "Jumlah": [st.session_state.percentages.get('positive', 0), st.session_state.percentages.get('neutral', 0), st.session_state.percentages.get('negative', 0)]
+        }
+        pie_df = pd.DataFrame(pie_data)
+        
+        # Pemetaan warna yang diinginkan
+        color_map = {
+            "Positif": "#00ff88",
+            "Netral": "#ffff88",
+            "Negatif": "#C62828"
+        }
+
+        fig = px.pie(pie_df,
+                     values='Jumlah',
+                     names='Sentimen',
+                     color='Sentimen',
+                     color_discrete_map=color_map,
                      template="plotly_dark",
                      hole=0.3)
         fig.update_layout(height=450, font=dict(size=12))
