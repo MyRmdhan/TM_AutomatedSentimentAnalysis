@@ -392,14 +392,7 @@ if not st.session_state.comments:
                 if info:
                     st.session_state.video_info = info
                     st.session_state.video_id = vid
-                    st.markdown("""
-                    <div style='background: rgba(0,200,100,0.15); border-left: 4px solid #00c864; padding: 15px; border-radius: 10px; margin: 10px 0;'>
-                        <p style='color: #66ff99; font-size: 13px; font-weight: 600; margin: 0;'>✓ Video Ditemukan</p>
-                        <p style='color: #cccccc; font-size: 12px; margin: 5px 0 0 0;'><strong>""" + info['title'] + """</strong></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.image(info['thumbnail_url'], use_container_width=True)
-                else: 
+                else:
                     st.markdown("""
                     <div style='background: rgba(200,0,0,0.15); border-left: 4px solid #c80000; padding: 12px; border-radius: 10px;'>
                         <p style='color: #ff6666; font-size: 12px; margin: 0;'><strong>✗ Video tidak ditemukan</strong></p>
@@ -413,7 +406,18 @@ if not st.session_state.comments:
                 """, unsafe_allow_html=True)
 
     if st.session_state.video_info and not st.session_state.comments:
+        # Persistent preview: show title + thumbnail so it doesn't disappear on reruns
         with col_btn2:
+            info = st.session_state.get('video_info')
+            if info:
+                st.markdown(f"""
+                <div style='background: rgba(0,200,100,0.15); border-left: 4px solid #00c864; padding: 12px; border-radius: 10px; margin: 8px 0;'>
+                    <p style='color: #66ff99; font-size: 13px; font-weight: 600; margin: 0;'>✓ Video Ditemukan</p>
+                    <p style='color: #cccccc; font-size: 12px; margin: 6px 0 6px 0;'><strong>{info['title']}</strong></p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.image(info['thumbnail_url'], use_container_width=True)
+
             # Configuration in an Expander for neatness
             with st.expander("⚙️ Pengaturan Analisis", expanded=True):
                 st.markdown("""
