@@ -347,7 +347,7 @@ def generate_wordcloud(text):
     return buf
 
 # ================== SESSION STATE ==================
-for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original']:
+for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original','comments_raw','timestamps_raw','scraped']:
     if k not in st.session_state:
         st.session_state[k] = None
 
@@ -474,16 +474,28 @@ if not st.session_state.comments:
 
             # Action button aligned full-width
             if st.button("▶️ Mulai Analisis Sentimen", type="primary", use_container_width=True):
-                with st.spinner("🔄 Menganalisis komentar..."):
-                    comments, timestamps = fetch_comments(st.session_state.video_id, st.session_state['max_comments'])
-                    if comments:
-                        result = analyze_sentiment(comments, timestamps)
+                # Step 1: Scrape comments only (store raw)
+                with st.spinner("� Mengambil komentar dari YouTube..."):
+                    comments_raw, timestamps_raw = fetch_comments(st.session_state.video_id, st.session_state['max_comments'])
+                    if not comments_raw:
+                        st.error("Gagal mengambil komentar atau tidak ada komentar.")
+                    else:
+                        st.session_state['comments_raw'] = comments_raw
+                        st.session_state['timestamps_raw'] = timestamps_raw
+                        st.session_state['scraped'] = True
+
+                # Step 2: Run analysis on scraped comments
+                if st.session_state.get('scraped'):
+                    with st.spinner("🔄 Menganalisis komentar..."):
+                        result = analyze_sentiment(st.session_state['comments_raw'], st.session_state['timestamps_raw'])
                         c, p, v, s, texts, data, scores, tfidf_words, texts_original = result
                         st.session_state.update({
-                            'comments': comments, 'timestamps': timestamps, 'counts': c, 'percentages': p,
+                            'comments': st.session_state['comments_raw'], 'timestamps': st.session_state['timestamps_raw'],
+                            'counts': c, 'percentages': p,
                             'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words, 'sentiment_texts_original': texts_original
                         })
-                        st.success("✓ Analisis selesai!"); st.rerun()
+                        st.success("✓ Analisis selesai!")
+                        st.rerun()
 
 if st.session_state.comments:
     st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 30px 0;'>", unsafe_allow_html=True)
