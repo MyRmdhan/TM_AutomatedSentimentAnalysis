@@ -523,20 +523,20 @@ if not st.session_state.comments:
                             elif selected_order_key == 'Acak':
                                 random.shuffle(comment_data)
                             
-                            st.session_state['comments_raw'] = [c['text'] for c in comment_data]
-                            st.session_state['timestamps_raw'] = [c['timestamp'] for c in comment_data]
+                            st.session_state['raw_comment_data'] = comment_data
                             st.session_state['scraped'] = True
                     
                     # Step 3: Run analysis on scraped and sorted comments
                     if st.session_state.get('scraped'):
                         with st.spinner("Menganalisis komentar..."):
                             # Menggunakan data yang sudah diproses dan diurutkan
-                            result = analyze_sentiment(comment_data)
+                            result = analyze_sentiment(st.session_state['raw_comment_data'])
                             c, p, v, s, texts, data, scores, tfidf_words, texts_original = result
                             
                             # Simpan semua hasil ke session state
                             st.session_state.update({
-                                'comments': st.session_state['comments_raw'], 'timestamps': st.session_state['timestamps_raw'],
+                                'comments': [item['text'] for item in st.session_state['raw_comment_data']], 
+                                'timestamps': [item['timestamp'] for item in st.session_state['raw_comment_data']],
                                 'counts': c, 'percentages': p,
                                 'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 
                                 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words, 
@@ -588,7 +588,7 @@ if st.session_state.comments:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("""
         <div style='background: linear-gradient(135deg, #2a2a2a, #3a3a3a); padding: 15px; border-radius: 10px; border: 1px solid #444444;'>
-            <p style='color: #cccccc; font-size: 13px; margin: 0;'><strong>📝 Total Komentar Dianalisis:</strong> """ + str(st.session_state.valid_comments) + """ komentar</p>
+            <p style='color: #cccccc; font-size: 13px; margin: 0;'><strong>📝 Total Komentar Dianalisis:</strong> """ + str(st.session_state.valid_comments) + """ (dari total """ + str(len(st.session_state.comments)) + """ yang diambil)</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -703,9 +703,55 @@ if st.session_state.comments:
     col_btn_reset1, col_btn_reset2, col_btn_reset3 = st.columns([2, 2, 3])
     with col_btn_reset1:
         if st.button("🔄 Analisis Video Lain", type="primary", use_container_width=True):
-            keys = ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original','comments_raw','timestamps_raw','scraped','is_running']
+            keys = ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original','comments_raw','timestamps_raw','scraped','is_running', 'comment_order', 'raw_comment_data']
             for k in keys: st.session_state[k] = None
             st.rerun()
+            
+    with col_btn_reset2:
+        # --- FITUR DOWNLOAD CSV ---
+        if st.session_state.get('raw_comment_data'):
+            
+            # Buat pemetaan dari teks komentar ke sentimen dan skor
+            text_to_sentiment_map = {
+                text: sent 
+                for sent, texts in st.session_state.sentiment_texts_original.items() 
+                for text in texts
+            }
+            text_to_score_map = {
+                text: score 
+                for sent, texts in st.session_state.sentiment_texts_original.items() 
+                for text, score in zip(texts, st.session_state.scores.get(sent, []))
+            }
+
+            # Siapkan data untuk diunduh
+            download_list = []
+            for item in st.session_state.raw_comment_data:
+                text = item['text']
+                sentiment = text_to_sentiment_map.get(text, "N/A (filtered)")
+                score = text_to_score_map.get(text, 0.0)
+                download_list.append({
+                    "Timestamp": item['timestamp'],
+                    "Komentar": text,
+                    "Sentimen": sentiment,
+                    "Skor Kepercayaan": score,
+                    "Jumlah Like": item['like_count']
+                })
+            
+            df_download = pd.DataFrame(download_list)
+            
+            @st.cache_data
+            def convert_df_to_csv(df):
+                return df.to_csv(index=False).encode('utf-8')
+
+            csv = convert_df_to_csv(df_download)
+
+            st.download_button(
+                label="📥 Download Data Komentar (.csv)",
+                data=csv,
+                file_name=f"komentar_{st.session_state.video_id}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
 
 st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 40px 0 20px 0;'>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #666666; font-size: 11px; margin: 0;'>© 2025 • YouTube Sentiment Analyzer • Dark Mode Modern Edition v1.0</p>", unsafe_allow_html=True)
