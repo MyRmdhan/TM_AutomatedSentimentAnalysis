@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from datetime import datetime
 from collections import Counter
+import random
 from sklearn.feature_extraction.text import TfidfVectorizer  # Tambah buat TF-IDF kata berpengaruh
 
 # ================== API KEY ==================
@@ -209,9 +210,9 @@ def fetch_video_info(video_id):
         st.error("Quota habis atau error API.")
     return None
 
-def fetch_comments(video_id, max_comments):
+def fetch_comments(video_id, max_comments, order_by='relevance'):
     youtube = build('youtube', 'v3', developerKey=API_KEY)
-    comments, timestamps = [], []
+    all_comments = []
     next_page = None
     status = st.empty()
     status.info("Mengambil komentar...")
@@ -220,12 +221,19 @@ def fetch_comments(video_id, max_comments):
     while fetched < max_comments:
         try:
             res = youtube.commentThreads().list(
-                part="snippet", videoId=video_id, maxResults=100, pageToken=next_page
+                part="snippet",
+                videoId=video_id,
+                maxResults=min(100, max_comments - fetched),
+                pageToken=next_page,
+                order=order_by
             ).execute()
             for item in res['items']:
                 snippet = item['snippet']['topLevelComment']['snippet']
-                comments.append(snippet['textDisplay'])
-                timestamps.append(snippet['publishedAt'])
+                all_comments.append({
+                    'text': snippet['textDisplay'],
+                    'timestamp': snippet['publishedAt'],
+                    'like_count': snippet['likeCount']
+                })
                 fetched += 1
                 if fetched % 50 == 0:
                     status.info(f"Mengambil: {fetched}/{max_comments}")
@@ -233,10 +241,10 @@ def fetch_comments(video_id, max_comments):
             next_page = res.get('nextPageToken')
             if not next_page: break
         except HttpError:
-            st.error("Quota habis!")
-            return [], []
-    status.success(f"Berhasil ambil {len(comments)} komentar!")
-    return comments, timestamps
+            st.error("Gagal mengambil komentar. Kuota API mungkin habis atau komentar dinonaktifkan.")
+            return []
+    status.success(f"Berhasil mengambil {len(all_comments)} komentar!")
+    return all_comments
 
 def clean_comment(text):
     # Hapus HTML tags dan entities
@@ -270,22 +278,25 @@ def clean_for_visualization(text):
     filtered = [w for w in words if w not in INDO_STOPWORDS and len(w) > 2]
     return ' '.join(filtered)
 
-def analyze_sentiment(comments, timestamps):
+def analyze_sentiment(comment_data):
     cleaned = []
     valid_timestamps = []
-    for c, ts in zip(comments, timestamps):
-        cleaned_text = clean_comment(c)
+    original_comments_data = []
+
+    for item in comment_data:
+        cleaned_text = clean_comment(item['text'])
         if len(cleaned_text) > 10:
             cleaned.append(cleaned_text)
-            valid_timestamps.append(ts)
+            valid_timestamps.append(item['timestamp'])
+            original_comments_data.append(item['text'])
 
     if not cleaned:
         return {}, {}, 0, {}, {}, {}, [], [], {}
 
     sentiments = {"positive": 0, "negative": 0, "neutral": 0}
     samples = {"positive": [], "negative": [], "neutral": []}
-    texts_original = {"positive": [], "negative": [], "neutral": []}  # Teks asli untuk IndoBERT
-    texts_clean = {"positive": [], "negative": [], "neutral": []}  # Teks bersih untuk visualisasi
+    texts_original = {"positive": [], "negative": [], "neutral": []}
+    texts_clean = {"positive": [], "negative": [], "neutral": []}
     data = []
     scores = {"positive": [], "negative": [], "neutral": []}
 
@@ -294,25 +305,31 @@ def analyze_sentiment(comments, timestamps):
     total = len(cleaned)
     batch_size = 64
 
-    # Step 1: Kirim teks asli ke IndoBERT untuk analisis
     for i in range(0, total, batch_size):
-        batch = cleaned[i:i+batch_size]
+        batch_cleaned = cleaned[i:i+batch_size]
+        batch_originals = original_comments_data[i:i+batch_size]
         batch_ts = valid_timestamps[i:i+batch_size]
-        results = nlp(batch)
-        for r, com, ts in zip(results, batch, batch_ts):
+        
+        results = nlp(batch_cleaned)
+        
+        for r, com_orig, com_clean, ts in zip(results, batch_originals, batch_cleaned, batch_ts):
             label = r['label'].lower()
             sentiments[label] += 1
-            texts_original[label].append(com)  # Simpan teks asli
             
-            # Bersihkan untuk visualisasi
-            clean_text = clean_for_visualization(com)
-            if clean_text:  # Hanya simpan jika ada kata setelah pembersihan
-                texts_clean[label].append(clean_text)
+            # Simpan teks asli untuk ditampilkan sebagai sampel
+            texts_original[label].append(com_orig)
+            
+            # Bersihkan lebih lanjut untuk visualisasi
+            vis_clean_text = clean_for_visualization(com_clean)
+            if vis_clean_text:
+                texts_clean[label].append(vis_clean_text)
             
             scores[label].append(r['score'])
             if len(samples[label]) < 5:
-                samples[label].append(com)
+                samples[label].append(com_orig) 
+            
             data.append({'date': datetime.fromisoformat(ts.replace('Z','+00:00')), 'sentimen': label})
+        
         if (i // batch_size) % 3 == 0:
             status.info(f"Proses: {min(i + batch_size, total)}/{total}")
 
@@ -347,7 +364,7 @@ def generate_wordcloud(text):
     return buf
 
 # ================== SESSION STATE ==================
-for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original','comments_raw','timestamps_raw','scraped','is_running']:
+for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original','comments_raw','timestamps_raw','scraped','is_running', 'comment_order']:
     if k not in st.session_state:
         st.session_state[k] = None
 
@@ -450,6 +467,13 @@ if not st.session_state.comments:
             with c2:
                 manual = st.number_input("Manual", 100, 5000, key='manual_max_comments', step=100, on_change=_sync_manual)
 
+            # Opsi urutan komentar
+            st.session_state['comment_order'] = st.selectbox(
+                'Urutkan berdasarkan',
+                ('Relevansi (Bawaan)', 'Terbaru', 'Terlama', 'Paling Populer (Like Terbanyak)', 'Acak'),
+                key='comment_order_selector'
+            )
+
             if st.session_state['max_comments'] > 2000:
                 st.markdown("""
                 <div style='background: rgba(255,150,0,0.15); border-left: 3px solid #ff9600; padding: 10px; border-radius: 6px; margin: 10px 0;'>
@@ -472,26 +496,51 @@ if not st.session_state.comments:
             if st.button("▶️ Mulai Analisis Sentimen", type="primary", use_container_width=True) and not st.session_state.get('is_running'):
                 st.session_state['is_running'] = True
                 try:
-                    # Step 1: Scrape comments only (store raw)
-                    with st.spinner("Mengambil komentar dari YouTube..."):
-                        comments_raw, timestamps_raw = fetch_comments(st.session_state.video_id, st.session_state['max_comments'])
-                        if not comments_raw:
+                    # Tentukan urutan untuk API
+                    order_map = {
+                        'Relevansi (Bawaan)': 'relevance',
+                        'Terbaru': 'time',
+                        'Terlama': 'time', # Ambil terbaru dulu, lalu balik
+                        'Paling Populer (Like Terbanyak)': 'relevance', # Ambil relevan, lalu urutkan
+                        'Acak': 'relevance'
+                    }
+                    selected_order_key = st.session_state.get('comment_order', 'Relevansi (Bawaan)')
+                    api_order = order_map[selected_order_key]
+
+                    # Step 1: Scrape comments
+                    with st.spinner(f"Mengambil komentar (Urutan: {selected_order_key})..."):
+                        comment_data = fetch_comments(st.session_state.video_id, st.session_state['max_comments'], order_by=api_order)
+                        
+                        if not comment_data:
                             st.error("Gagal mengambil komentar atau tidak ada komentar.")
                             st.session_state['is_running'] = False
                         else:
-                            st.session_state['comments_raw'] = comments_raw
-                            st.session_state['timestamps_raw'] = timestamps_raw
+                            # Step 2: Lakukan sorting setelah pengambilan data jika perlu
+                            if selected_order_key == 'Terlama':
+                                comment_data.reverse()
+                            elif selected_order_key == 'Paling Populer (Like Terbanyak)':
+                                comment_data.sort(key=lambda x: x['like_count'], reverse=True)
+                            elif selected_order_key == 'Acak':
+                                random.shuffle(comment_data)
+                            
+                            st.session_state['comments_raw'] = [c['text'] for c in comment_data]
+                            st.session_state['timestamps_raw'] = [c['timestamp'] for c in comment_data]
                             st.session_state['scraped'] = True
-
-                    # Step 2: Run analysis on scraped comments
+                    
+                    # Step 3: Run analysis on scraped and sorted comments
                     if st.session_state.get('scraped'):
                         with st.spinner("Menganalisis komentar..."):
-                            result = analyze_sentiment(st.session_state['comments_raw'], st.session_state['timestamps_raw'])
+                            # Menggunakan data yang sudah diproses dan diurutkan
+                            result = analyze_sentiment(comment_data)
                             c, p, v, s, texts, data, scores, tfidf_words, texts_original = result
+                            
+                            # Simpan semua hasil ke session state
                             st.session_state.update({
                                 'comments': st.session_state['comments_raw'], 'timestamps': st.session_state['timestamps_raw'],
                                 'counts': c, 'percentages': p,
-                                'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words, 'sentiment_texts_original': texts_original
+                                'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 
+                                'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words, 
+                                'sentiment_texts_original': texts_original
                             })
                             st.success("✓ Analisis selesai!")
                             st.rerun()
