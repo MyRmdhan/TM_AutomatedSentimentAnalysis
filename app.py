@@ -170,6 +170,46 @@ st.markdown("""
         border: 1.5px solid #333333;
         padding: 10px 12px;
     }
+
+    /* --- Loading Overlay --- */
+    .overlay-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        flex-direction: column;
+    }
+    .loader {
+        border: 8px solid #f3f3f3;
+        border-radius: 50%;
+        border-top: 8px solid #3498db;
+        width: 60px;
+        height: 60px;
+        -webkit-animation: spin 2s linear infinite;
+        animation: spin 2s linear infinite;
+    }
+    .loader-text {
+        color: #e0e0e0;
+        margin-top: 20px;
+        font-size: 16px;
+        font-weight: 500;
+    }
+    @-webkit-keyframes spin {
+        0% { -webkit-transform: rotate(0deg); }
+        100% { -webkit-transform: rotate(360deg); }
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -199,6 +239,14 @@ def extract_video_id(url):
     match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
     return match.group(1) if match else None
 
+def create_overlay_html(text):
+    return f"""
+    <div class="overlay-container">
+        <div class="loader"></div>
+        <div class="loader-text">{text}</div>
+    </div>
+    """
+
 def fetch_video_info(video_id):
     youtube = build('youtube', 'v3', developerKey=API_KEY)
     try:
@@ -210,16 +258,18 @@ def fetch_video_info(video_id):
         st.error("Quota habis atau error API.")
     return None
 
-def fetch_comments(video_id, max_comments, order_by='relevance'):
+def fetch_comments(video_id, max_comments, order_by, placeholder):
     youtube = build('youtube', 'v3', developerKey=API_KEY)
     all_comments = []
     next_page = None
-    status = st.empty()
-    status.info("Mengambil komentar...")
     fetched = 0
 
     while fetched < max_comments:
         try:
+            # Update overlay
+            status_text = f"Mengambil komentar: {fetched}/{max_comments}"
+            placeholder.markdown(create_overlay_html(status_text), unsafe_allow_html=True)
+            
             res = youtube.commentThreads().list(
                 part="snippet",
                 videoId=video_id,
@@ -227,6 +277,7 @@ def fetch_comments(video_id, max_comments, order_by='relevance'):
                 pageToken=next_page,
                 order=order_by
             ).execute()
+            
             for item in res['items']:
                 snippet = item['snippet']['topLevelComment']['snippet']
                 all_comments.append({
@@ -235,15 +286,17 @@ def fetch_comments(video_id, max_comments, order_by='relevance'):
                     'like_count': snippet['likeCount']
                 })
                 fetched += 1
-                if fetched % 50 == 0:
-                    status.info(f"Mengambil: {fetched}/{max_comments}")
                 if fetched >= max_comments: break
+            
             next_page = res.get('nextPageToken')
             if not next_page: break
         except HttpError:
             st.error("Gagal mengambil komentar. Kuota API mungkin habis atau komentar dinonaktifkan.")
+            placeholder.empty()
             return []
-    status.success(f"Berhasil mengambil {len(all_comments)} komentar!")
+
+    status_text = f"Berhasil mengambil {len(all_comments)} komentar!"
+    placeholder.markdown(create_overlay_html(status_text), unsafe_allow_html=True)
     return all_comments
 
 def clean_comment(text):
@@ -278,7 +331,15 @@ def clean_for_visualization(text):
     filtered = [w for w in words if w not in INDO_STOPWORDS and len(w) > 2]
     return ' '.join(filtered)
 
-def analyze_sentiment(comment_data):
+def create_overlay_html(text):
+    return f"""
+    <div class="overlay-container">
+        <div class="loader"></div>
+        <div class="loader-text">{text}</div>
+    </div>
+    """
+
+def analyze_sentiment(comment_data, placeholder):
     cleaned = []
     valid_timestamps = []
     original_comments_data = []
@@ -291,6 +352,7 @@ def analyze_sentiment(comment_data):
             original_comments_data.append(item['text'])
 
     if not cleaned:
+        placeholder.empty()
         return {}, {}, 0, {}, {}, {}, [], [], {}
 
     sentiments = {"positive": 0, "negative": 0, "neutral": 0}
@@ -300,12 +362,17 @@ def analyze_sentiment(comment_data):
     data = []
     scores = {"positive": [], "negative": [], "neutral": []}
 
-    status = st.empty()
-    status.info("Menganalisis sentimen...")
     total = len(cleaned)
     batch_size = 64
+    
+    placeholder.markdown(create_overlay_html(f"Menganalisis {total} komentar..."), unsafe_allow_html=True)
 
     for i in range(0, total, batch_size):
+        # Update status di dalam loop
+        if (i // batch_size) % 2 == 0:
+            status_text = f"Menganalisis komentar: {min(i + batch_size, total)}/{total}"
+            placeholder.markdown(create_overlay_html(status_text), unsafe_allow_html=True)
+
         batch_cleaned = cleaned[i:i+batch_size]
         batch_originals = original_comments_data[i:i+batch_size]
         batch_ts = valid_timestamps[i:i+batch_size]
@@ -315,31 +382,22 @@ def analyze_sentiment(comment_data):
         for r, com_orig, com_clean, ts in zip(results, batch_originals, batch_cleaned, batch_ts):
             label = r['label'].lower()
             sentiments[label] += 1
-            
-            # Simpan teks asli untuk ditampilkan sebagai sampel
             texts_original[label].append(com_orig)
-            
-            # Bersihkan lebih lanjut untuk visualisasi
             vis_clean_text = clean_for_visualization(com_clean)
             if vis_clean_text:
                 texts_clean[label].append(vis_clean_text)
-            
             scores[label].append(r['score'])
             if len(samples[label]) < 5:
-                samples[label].append(com_orig) 
-            
+                samples[label].append(com_orig)
             data.append({'date': datetime.fromisoformat(ts.replace('Z','+00:00')), 'sentimen': label})
-        
-        if (i // batch_size) % 3 == 0:
-            status.info(f"Proses: {min(i + batch_size, total)}/{total}")
 
-    percentages = {k: round(v/total*100, 2) for k, v in sentiments.items()}
-    status.success("Analisis selesai!")
-
+    percentages = {k: round(v/total*100, 2) if total > 0 else 0 for k, v in sentiments.items()}
+    
+    placeholder.markdown(create_overlay_html("Menyelesaikan visualisasi..."), unsafe_allow_html=True)
+    
     # Step 2: Hitung TF-IDF menggunakan teks bersih untuk visualisasi
     tfidf = TfidfVectorizer(max_features=20)
     tfidf_docs = [' '.join(texts_clean[sent]) for sent in ['positive', 'negative', 'neutral']]
-    # Cek apakah ada dokumen kosong
     if all(doc.strip() for doc in tfidf_docs):
         tfidf.fit(tfidf_docs)
         tfidf_words = {}
@@ -389,159 +447,143 @@ with col_header2:
 
 st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 20px 0;'>", unsafe_allow_html=True)
 
-# Sidebar removed — move configuration controls into the main page after the video is found
+# Placeholder for the loading overlay
+overlay_placeholder = st.empty()
 
-if 'show_wc' not in st.session_state:
-    st.session_state['show_wc'] = True
-if 'max_comments' not in st.session_state:
-    st.session_state['max_comments'] = 500
+# Main UI
+if not st.session_state.get('is_running'):
+    url = st.text_input("Link YouTube", placeholder="https://www.youtube.com/watch?v=...", help="Masukkan URL video YouTube yang ingin dianalisis")
 
-url = st.text_input("Link YouTube", placeholder="https://www.youtube.com/watch?v=...", help="Masukkan URL video YouTube yang ingin dianalisis")
-
-if not st.session_state.comments:
-    col_btn1, col_btn2, col_placeholder = st.columns([2, 3, 2])
-    
-    with col_btn1:
-        if st.button("🔍 Cari Video", type="secondary", use_container_width=True) and url:
-            vid = extract_video_id(url)
-            if vid:
-                info = fetch_video_info(vid)
-                if info:
-                    st.session_state.video_info = info
-                    st.session_state.video_id = vid
-                else:
+    if not st.session_state.comments:
+        col_btn1, col_btn2, col_placeholder = st.columns([2, 3, 2])
+        
+        with col_btn1:
+            if st.button("🔍 Cari Video", type="secondary", use_container_width=True) and url:
+                vid = extract_video_id(url)
+                if vid:
+                    info = fetch_video_info(vid)
+                    if info:
+                        st.session_state.video_info = info
+                        st.session_state.video_id = vid
+                        st.rerun() # Rerun to show the config section
+                    else:
+                        st.markdown("""
+                        <div style='background: rgba(200,0,0,0.15); border-left: 4px solid #c80000; padding: 12px; border-radius: 10px;'>
+                            <p style='color: #ff6666; font-size: 12px; margin: 0;'><strong>✗ Video tidak ditemukan</strong></p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else: 
                     st.markdown("""
                     <div style='background: rgba(200,0,0,0.15); border-left: 4px solid #c80000; padding: 12px; border-radius: 10px;'>
-                        <p style='color: #ff6666; font-size: 12px; margin: 0;'><strong>✗ Video tidak ditemukan</strong></p>
+                        <p style='color: #ff6666; font-size: 12px; margin: 0;'><strong>✗ Link YouTube tidak valid</strong></p>
                     </div>
                     """, unsafe_allow_html=True)
-            else: 
-                st.markdown("""
-                <div style='background: rgba(200,0,0,0.15); border-left: 4px solid #c80000; padding: 12px; border-radius: 10px;'>
-                    <p style='color: #ff6666; font-size: 12px; margin: 0;'><strong>✗ Link YouTube tidak valid</strong></p>
-                </div>
-                """, unsafe_allow_html=True)
 
-    if st.session_state.video_info and not st.session_state.comments:
-        # Persistent preview: show title + thumbnail so it doesn't disappear on reruns
-        with col_btn2:
-            info = st.session_state.get('video_info')
-            if info:
-                st.markdown(f"""
-                <div style='background: rgba(0,200,100,0.15); border-left: 4px solid #00c864; padding: 12px; border-radius: 10px; margin: 8px 0;'>
-                    <p style='color: #66ff99; font-size: 13px; font-weight: 600; margin: 0;'>✓ Video Ditemukan</p>
-                    <p style='color: #cccccc; font-size: 12px; margin: 6px 0 6px 0;'><strong>{info['title']}</strong></p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.image(info['thumbnail_url'], use_container_width=True)
+        if st.session_state.video_info and not st.session_state.comments:
+            # Persistent preview: show title + thumbnail so it doesn't disappear on reruns
+            with col_btn2:
+                info = st.session_state.get('video_info')
+                if info:
+                    st.markdown(f"""
+                    <div style='background: rgba(0,200,100,0.15); border-left: 4px solid #00c864; padding: 12px; border-radius: 10px; margin: 8px 0;'>
+                        <p style='color: #66ff99; font-size: 13px; font-weight: 600; margin: 0;'>✓ Video Ditemukan</p>
+                        <p style='color: #cccccc; font-size: 12px; margin: 6px 0 6px 0;'><strong>{info['title']}</strong></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.image(info['thumbnail_url'], use_container_width=True)
 
-            # Configuration in an Expander for neatness
-          
-            # Initialize widget-backed session_state keys (avoid setting during render)
-            if 'slider_max_comments' not in st.session_state:
-                st.session_state['slider_max_comments'] = st.session_state.get('max_comments', 500)
-            if 'manual_max_comments' not in st.session_state:
-                st.session_state['manual_max_comments'] = st.session_state.get('max_comments', 500)
+                # Configuration in an Expander for neatness
+                with st.expander("⚙️ Pengaturan Analisis", expanded=True):
+                    st.markdown("""
+                    <div style='margin-top: 6px; margin-bottom: 6px;'>
+                        <p style='color: #cccccc; font-size: 13px; margin: 0;'>Atur parameter analisis</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                if 'slider_max_comments' not in st.session_state:
+                    st.session_state['slider_max_comments'] = st.session_state.get('max_comments', 500)
+                if 'manual_max_comments' not in st.session_state:
+                    st.session_state['manual_max_comments'] = st.session_state.get('max_comments', 500)
 
-            # Keep slider and manual input synchronized via session_state callbacks
-            def _sync_slider():
-                # when slider changes, update manual and canonical max_comments
-                val = st.session_state.get('slider_max_comments')
-                st.session_state['max_comments'] = val
-                st.session_state['manual_max_comments'] = val
+                def _sync_slider():
+                    val = st.session_state.get('slider_max_comments')
+                    st.session_state['max_comments'] = val
+                    st.session_state['manual_max_comments'] = val
 
-            def _sync_manual():
-                # when manual input changes, update slider and canonical max_comments
-                val = st.session_state.get('manual_max_comments')
-                st.session_state['max_comments'] = val
-                st.session_state['slider_max_comments'] = val
+                def _sync_manual():
+                    val = st.session_state.get('manual_max_comments')
+                    st.session_state['max_comments'] = val
+                    st.session_state['slider_max_comments'] = val
 
-            c1, c2 = st.columns(2)
-            with c1:
-                slider = st.slider("Jumlah Komentar (100-5000)", 100, 5000, key='slider_max_comments', step=100, on_change=_sync_slider)
-            with c2:
-                manual = st.number_input("Manual", 100, 5000, key='manual_max_comments', step=100, on_change=_sync_manual)
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.slider("Jumlah Komentar (100-5000)", 100, 5000, key='slider_max_comments', step=100, on_change=_sync_slider)
+                with c2:
+                    st.number_input("Manual", 100, 5000, key='manual_max_comments', step=100, on_change=_sync_manual)
 
-            # Opsi urutan komentar
-            st.session_state['comment_order'] = st.selectbox(
-                'Urutkan berdasarkan',
-                ('Relevansi (Bawaan)', 'Terbaru', 'Terlama', 'Paling Populer (Like Terbanyak)', 'Acak'),
-                key='comment_order_selector'
-            )
+                st.session_state['comment_order'] = st.selectbox(
+                    'Urutkan berdasarkan',
+                    ('Relevansi (Bawaan)', 'Terbaru', 'Terlama', 'Paling Populer (Like Terbanyak)', 'Acak'),
+                    key='comment_order_selector'
+                )
 
-            if st.session_state['max_comments'] > 2000:
-                st.markdown("""
-                <div style='background: rgba(255,150,0,0.15); border-left: 3px solid #ff9600; padding: 10px; border-radius: 6px; margin: 10px 0;'>
-                    <p style='color: #ffb366; font-size: 12px; margin: 0;'><strong>⏱️ Catatan:</strong> Banyak komentar = proses lebih lama</p>
-                </div>
-                """, unsafe_allow_html=True)
-            elif st.session_state['max_comments'] >= 1000:
-                st.markdown("""
-                <div style='background: rgba(0,200,100,0.15); border-left: 3px solid #00c864; padding: 10px; border-radius: 6px; margin: 10px 0;'>
-                    <p style='color: #66ff99; font-size: 12px; margin: 0;'><strong>✓ Optimal:</strong> Parameter sudah ideal untuk analisis cepat</p>
-                </div>
-                """, unsafe_allow_html=True)
+                if st.session_state['max_comments'] > 2000:
+                    st.markdown("""<div style='...'>...</div>""", unsafe_allow_html=True)
+                elif st.session_state['max_comments'] >= 1000:
+                    st.markdown("""<div style='...'>...</div>""", unsafe_allow_html=True)
 
-            st.markdown("---")
-            st.session_state['show_wc'] = st.checkbox("☁️ Tampilkan Word Cloud", value=st.session_state.get('show_wc', True))
+                st.markdown("---")
+                st.session_state['show_wc'] = st.checkbox("☁️ Tampilkan Word Cloud", value=st.session_state.get('show_wc', True))
 
-          
+                if st.button("▶️ Mulai Analisis Sentimen", type="primary", use_container_width=True):
+                    st.session_state['is_running'] = True
+                    st.rerun()
 
-            # Action button aligned full-width
-            if st.button("▶️ Mulai Analisis Sentimen", type="primary", use_container_width=True) and not st.session_state.get('is_running'):
-                st.session_state['is_running'] = True
-                try:
-                    # Tentukan urutan untuk API
-                    order_map = {
-                        'Relevansi (Bawaan)': 'relevance',
-                        'Terbaru': 'time',
-                        'Terlama': 'time', # Ambil terbaru dulu, lalu balik
-                        'Paling Populer (Like Terbanyak)': 'relevance', # Ambil relevan, lalu urutkan
-                        'Acak': 'relevance'
-                    }
-                    selected_order_key = st.session_state.get('comment_order', 'Relevansi (Bawaan)')
-                    api_order = order_map[selected_order_key]
+# This block runs when the "Mulai Analisis" button is clicked
+if st.session_state.get('is_running'):
+    try:
+        overlay_placeholder.markdown(create_overlay_html("Mempersiapkan analisis..."), unsafe_allow_html=True)
+        
+        # Tentukan urutan untuk API
+        order_map = {
+            'Relevansi (Bawaan)': 'relevance', 'Terbaru': 'time', 'Terlama': 'time',
+            'Paling Populer (Like Terbanyak)': 'relevance', 'Acak': 'relevance'
+        }
+        selected_order_key = st.session_state.get('comment_order', 'Relevansi (Bawaan)')
+        api_order = order_map[selected_order_key]
 
-                    # Step 1: Scrape comments
-                    with st.spinner(f"Mengambil komentar (Urutan: {selected_order_key})..."):
-                        comment_data = fetch_comments(st.session_state.video_id, st.session_state['max_comments'], order_by=api_order)
-                        
-                        if not comment_data:
-                            st.error("Gagal mengambil komentar atau tidak ada komentar.")
-                            st.session_state['is_running'] = False
-                        else:
-                            # Step 2: Lakukan sorting setelah pengambilan data jika perlu
-                            if selected_order_key == 'Terlama':
-                                comment_data.reverse()
-                            elif selected_order_key == 'Paling Populer (Like Terbanyak)':
-                                comment_data.sort(key=lambda x: x['like_count'], reverse=True)
-                            elif selected_order_key == 'Acak':
-                                random.shuffle(comment_data)
-                            
-                            st.session_state['raw_comment_data'] = comment_data
-                            st.session_state['scraped'] = True
-                    
-                    # Step 3: Run analysis on scraped and sorted comments
-                    if st.session_state.get('scraped'):
-                        with st.spinner("Menganalisis komentar..."):
-                            # Menggunakan data yang sudah diproses dan diurutkan
-                            result = analyze_sentiment(st.session_state['raw_comment_data'])
-                            c, p, v, s, texts, data, scores, tfidf_words, texts_original = result
-                            
-                            # Simpan semua hasil ke session state
-                            st.session_state.update({
-                                'comments': [item['text'] for item in st.session_state['raw_comment_data']], 
-                                'timestamps': [item['timestamp'] for item in st.session_state['raw_comment_data']],
-                                'counts': c, 'percentages': p,
-                                'valid_comments': v, 'samples': s, 'sentiment_texts': texts, 
-                                'sentiment_data': data, 'scores': scores, 'tfidf_words': tfidf_words, 
-                                'sentiment_texts_original': texts_original
-                            })
-                            st.success("✓ Analisis selesai!")
-                            st.rerun()
-                except Exception as e:
-                    st.error(f"Terjadi kesalahan saat proses: {e}")
-                    st.session_state['is_running'] = False
+        # Step 1: Scrape comments
+        comment_data = fetch_comments(st.session_state.video_id, st.session_state['max_comments'], order_by=api_order, placeholder=overlay_placeholder)
+        
+        if comment_data:
+            # Step 2: Lakukan sorting setelah pengambilan data
+            if selected_order_key == 'Terlama':
+                comment_data.reverse()
+            elif selected_order_key == 'Paling Populer (Like Terbanyak)':
+                comment_data.sort(key=lambda x: x['like_count'], reverse=True)
+            elif selected_order_key == 'Acak':
+                random.shuffle(comment_data)
+            
+            st.session_state['raw_comment_data'] = comment_data
+            
+            # Step 3: Run analysis
+            result = analyze_sentiment(st.session_state['raw_comment_data'], placeholder=overlay_placeholder)
+            c, p, v, s, texts, data, scores, tfidf_words, texts_original = result
+            
+            # Simpan semua hasil
+            st.session_state.update({
+                'comments': [item['text'] for item in st.session_state['raw_comment_data']],
+                'timestamps': [item['timestamp'] for item in st.session_state['raw_comment_data']],
+                'counts': c, 'percentages': p, 'valid_comments': v, 'samples': s, 
+                'sentiment_texts': texts, 'sentiment_data': data, 'scores': scores, 
+                'tfidf_words': tfidf_words, 'sentiment_texts_original': texts_original
+            })
+    except Exception as e:
+        st.error(f"Terjadi kesalahan saat proses: {e}")
+    finally:
+        # Apapun yang terjadi, matikan overlay dan rerun
+        st.session_state['is_running'] = False
+        overlay_placeholder.empty()
+        st.rerun()
 
 if st.session_state.comments:
     st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 30px 0;'>", unsafe_allow_html=True)
@@ -750,4 +792,3 @@ if st.session_state.comments:
 
 st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 40px 0 20px 0;'>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #666666; font-size: 11px; margin: 0;'>© 2025 • YouTube Sentiment Analyzer • Dark Mode Modern Edition v1.0</p>", unsafe_allow_html=True)
-
