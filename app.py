@@ -436,12 +436,7 @@ if not st.session_state.comments:
                 st.image(info['thumbnail_url'], use_container_width=True)
 
             # Configuration in an Expander for neatness
-            with st.expander("⚙️ Pengaturan Analisis", expanded=True):
-                st.markdown("""
-                <div style='margin-top: 6px; margin-bottom: 6px;'>
-                    <p style='color: #cccccc; font-size: 13px; margin: 0;'>Atur parameter analisis</p>
-                </div>
-                """, unsafe_allow_html=True)
+          
             # Initialize widget-backed session_state keys (avoid setting during render)
             if 'slider_max_comments' not in st.session_state:
                 st.session_state['slider_max_comments'] = st.session_state.get('max_comments', 500)
@@ -755,3 +750,4 @@ if st.session_state.comments:
 
 st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 40px 0 20px 0;'>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #666666; font-size: 11px; margin: 0;'>© 2025 • YouTube Sentiment Analyzer • Dark Mode Modern Edition v1.0</p>", unsafe_allow_html=True)
+
