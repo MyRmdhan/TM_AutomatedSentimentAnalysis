@@ -331,14 +331,6 @@ def clean_for_visualization(text):
     filtered = [w for w in words if w not in INDO_STOPWORDS and len(w) > 2]
     return ' '.join(filtered)
 
-def create_overlay_html(text):
-    return f"""
-    <div class="overlay-container">
-        <div class="loader"></div>
-        <div class="loader-text">{text}</div>
-    </div>
-    """
-
 def analyze_sentiment(comment_data, placeholder):
     cleaned = []
     valid_timestamps = []
@@ -425,6 +417,11 @@ def generate_wordcloud(text):
 for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original','comments_raw','timestamps_raw','scraped','is_running', 'comment_order', 'raw_comment_data']:
     if k not in st.session_state:
         st.session_state[k] = None
+
+if 'show_wc' not in st.session_state:
+    st.session_state['show_wc'] = True
+if 'max_comments' not in st.session_state:
+    st.session_state['max_comments'] = 500
 
 if 'show_wc' not in st.session_state:
     st.session_state['show_wc'] = True
@@ -761,12 +758,14 @@ if st.session_state.comments:
             # Siapkan data untuk diunduh
             download_list = []
             for item in st.session_state.raw_comment_data:
-                text = item['text']
-                sentiment = text_to_sentiment_map.get(text, "N/A (filtered)")
-                score = text_to_score_map.get(text, 0.0)
+                original_text = item['text']
+                cleaned_text = clean_comment(original_text)
+                sentiment = text_to_sentiment_map.get(original_text, "N/A (filtered)")
+                score = text_to_score_map.get(original_text, 0.0)
                 download_list.append({
                     "Timestamp": item['timestamp'],
-                    "Komentar": text,
+                    "Komentar Asli": original_text,
+                    "Komentar Bersih": cleaned_text,
                     "Sentimen": sentiment,
                     "Skor Kepercayaan": score,
                     "Jumlah Like": item['like_count']
@@ -790,4 +789,3 @@ if st.session_state.comments:
 
 st.markdown("<hr style='border: none; border-top: 1px solid #333333; margin: 40px 0 20px 0;'>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #666666; font-size: 11px; margin: 0;'>© 2025 • YouTube Sentiment Analyzer • Dark Mode Modern Edition v1.0</p>", unsafe_allow_html=True)
-
