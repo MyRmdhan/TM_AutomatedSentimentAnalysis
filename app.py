@@ -422,9 +422,14 @@ def generate_wordcloud(text):
     return buf
 
 # ================== SESSION STATE ==================
-for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original','comments_raw','timestamps_raw','scraped','is_running', 'comment_order']:
+for k in ['video_info','video_id','comments','timestamps','counts','percentages','valid_comments','samples','sentiment_texts','sentiment_data','scores','tfidf_words','sentiment_texts_original','comments_raw','timestamps_raw','scraped','is_running', 'comment_order', 'raw_comment_data']:
     if k not in st.session_state:
         st.session_state[k] = None
+
+if 'show_wc' not in st.session_state:
+    st.session_state['show_wc'] = True
+if 'max_comments' not in st.session_state:
+    st.session_state['max_comments'] = 500
 
 # ================== UI ==================
 # Header Section dengan styling menarik
